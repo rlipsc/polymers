@@ -1,6 +1,7 @@
-import polymorph, odbc
+import polymorph
 
 template defineDatabaseComponents*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions) {.dirty.} =
+  import odbc
   registerComponents(compOpts):
     type
       ConnectToDb* = object
