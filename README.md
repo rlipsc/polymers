@@ -1,2 +1,85 @@
-# polyshards
+# Polyshards
+
 A library of components and systems for Polymorph.
+
+Each set of components include a registration and/or system definition template that allows passing code generation options and gives control over the order systems are instantiated.
+
+Most component modules include a demonstration of how they can be used when run individually.
+
+## Included Components
+
+### Graphics
+
+*Module ecs_opengl*
+
+**Model**: Uses [glbits](https://github.com/rlipsc/glbits) to Displays a 3D model with OpenGL. The model is rendered with vertex buffer/array objects and instanced rendering, so is performant even with hundreds of thousands of instances.
+
+Running ecs_opengl directly will execute the demo, which in release mode will generate 300,000 models, where some are attracted to the mouse and others repelled by it:
+ 
+![ecs_opengl](../media/ecs_opengl.gif?raw=true)
+
+### Console
+
+*Module ecs_renderchar*
+
+**RenderChar**: This component efficiently outputs a single character to the console, controllable with x and y coordinates normalised to `-1.0 .. 1.0`. This allows easy creation of text driven interfaces or outputs that more closely resemble rendering with graphics.
+
+**RenderString**: A string of entities with `RenderChar` components, managed so you can set the `text` property and a normalised (x, y) coordinate. The constituent entities and components are accessible to edit, and handles clipping to the desired width/borders.
+
+**DensityChar**: This component updates the character displayed in a `RenderChar` according to the number of `RenderChar` entities present in a particular character position. This gives a simple way to display multiple entities that are close together.
+
+*Module ecs_consoleevents*
+
+**ConsoleInput**: Receive console input event components.
+
+**KeyInput**, **KeyChange**: Receive key press events.
+
+**MouseInput**: Receive all mouse event components.
+
+**MouseMoving**, **MouseButtons**: Receive specific mouse events. 
+
+**WindowChange**: Receive events for the console window changing size. 
+
+*Module ecs_mousebuttons*
+
+This module uses `ecs_renderchar` and `ecs_consoleevents` to create mouse driven textual UI 'buttons'.
+
+**MouseButton**: Allows defining a size, text alignment, background and border options. Full access to the **RenderChar** entities is given so they may be edited. Generates event components such as **MouseButtonClicked** and **MouseButtonMouseOver** for systems to respond to.
+
+**DrawMouse**: Tag an entity with this component so that it's character is drawn at the mouse location.
+
+### Database
+
+There are two version of the database components, `ecs_db_threads` for threaded queries and `ecs_db` for non-threaded.
+
+Note that these use the `odbc` library found [here](https://github.com/coffeepots/odbc).
+
+**ConnectToDb**: Initiates a connection to the database with it's contained parameters. Once connection is established, it is removed and a **DatabaseConnection** component is added to the entity.
+
+**Query**: Performs a query when a **DatabaseConnection** is present. When a result is obtained, it is placed within a **QueryResult** component and added to the entity.
+
+### Networking
+
+*Module ecs_udp*
+
+**UDPRead**: Tag an entity with this component to subscribe to incoming `UDPData` packets delivered within `UDPIncoming` components.
+
+**UDPSend**: Adding this component causes a UDP message to be sent to the parameter host and port.
+
+### Miscellaneous
+
+*Module ecs_spawnafter*
+
+**SpawnAfter**: Generates a `construction` (a template of entities) after a given time frame. Useful for performing some task after some delay without blocking.
+
+*Module ecs_killing*
+
+**Killed**: This tag component can be used to handle clean up operations within a frame of execution. Create systems that use `Killed` along with other components to handle things like freeing resources owned by a component at the correct stage of system execution, rather than calling `delete` directly. Invoke `addKillingSystem` at the appropriate time to actually `delete` entities after any clean up work has been finished. 
+
+**KillAfter**: Add `Killed` to an entity after a set duration. Useful for temporary entities that might have resources that need appropriate finalisation, or just 'fire and forget' temporary entities.
+
+## Demos
+
+* `dbbrowser`: A simple console program that uses a combination of components to read and display table field info and data within a database.
+* `netspeedtest`: Measures the speed of sending/receiving UDP packets on localhost by counting how many arrive within a set time frame.
+

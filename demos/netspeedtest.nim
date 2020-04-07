@@ -10,7 +10,7 @@ const
 import random
 from winlean import getLastError
 
-defineNetworking(compOpts, sysOpts)
+defineUDPNetworking(compOpts, sysOpts)
 makeEcs(entOpts)
 commitSystems("poll")
 

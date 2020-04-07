@@ -1,6 +1,6 @@
 import polymorph
 
-template defineNetworking*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions): untyped {.dirty.} =
+template defineUDPNetworking*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions): untyped {.dirty.} =
   import nativesockets
   from os import raiseOSError, osLastError
   from winlean import recvFrom, wsaGetLastError, AddrInfo, bindSocket, WSAEWOULDBLOCK
@@ -46,7 +46,7 @@ template defineNetworking*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions): un
       let data = getAddrInfo(sys.hostname, sys.port, AF_UNSPEC, SOCK_DGRAM, IPPROTO_UDP)
       var
         dataAddr: ptr SockAddr
-        dataAddrLen: cSize
+        dataAddrLen: cSize_t
       var curData = data
       while curData.ai_family != AF_INET.cint and curData.ai_next != nil:
         curData = curData.ai_next
@@ -119,7 +119,7 @@ when isMainModule:
   import polyshards, random, times
   from winlean import getLastError
 
-  defineNetworking(compOpts, sysOpts)
+  defineUDPNetworking(compOpts, sysOpts)
 
   # Hook incoming
   makeSystemOpts("messageArrived", [UDPIncoming], sysOpts):
