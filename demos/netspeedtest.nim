@@ -1,4 +1,4 @@
-import polymorph, polyshards
+import polymorph, polymers
 
 const
   # Maximum number of subscribers.

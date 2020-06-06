@@ -1,4 +1,4 @@
-import polymorph, polyshards, odbc, strutils
+import polymorph, polymers, odbc, strutils
 
 const
   entOpts = defaultEntityOptions

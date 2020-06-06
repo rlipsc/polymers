@@ -116,7 +116,7 @@ when isMainModule:
     compOpts = ECSCompOptions(maxComponents: maxEnts)
     sysOpts = ECSSysOptions(maxEntities: maxEnts)
 
-  import polyshards, random, times
+  import polymers, random, times
   from winlean import getLastError
 
   defineUDPNetworking(compOpts, sysOpts)

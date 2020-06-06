@@ -1,4 +1,4 @@
-import polymorph, polyshards
+import polymorph, polymers
 
 template defineMouseButtons*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions) {.dirty.} =
   from math import floor

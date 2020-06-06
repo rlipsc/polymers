@@ -1,10 +1,22 @@
-# Polyshards
+# Polymers
 
-A library of components and systems for Polymorph.
+`Polymers` is a library of components and systems for [Polymorph](https://github.com/rlipsc/polymorph). Polymorph generates entity component systems that are statically optimised for the components and systems used.
 
-Each set of components include a registration and/or system definition template that allows passing code generation options and gives control over the order systems are instantiated.
+The `Polymers` library provides components for common tasks to support developing software in a data orientated style. Components can freely be combined at run-time to invoke their systems, and built on through user made components and systems.
 
-Most component modules include a demonstration of how they can be used when run individually.
+## Using
+
+Each set of components includes registration templates that allow passing code generation options and gives control over the order systems are instantiated.
+
+`import polymers` will give access to all the define templates, but doesn't define anything or generate any code unless these templates are invoked.
+
+To use components in your ECS, use the relevant define template to register components/systems before the ECS is sealed with `makeEcs`.
+
+Some components supply separate templates to add their system bodies, for example if the order of their execution is important within a larger work flow. Order is defined by the sequence that `makeSystem` and/or `makeSystemBody` are encountered before `commitSystems`.
+
+Order only affects the generated wrapper proc made by `commitSystems`. Systems can be run in any order by calling individual system update procedures.
+
+Many component modules include a demonstration of how they can be used when run as the main module, and the `demos` folder contains various more complex examples of using components together.
 
 ## Included Components
 
