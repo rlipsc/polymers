@@ -38,7 +38,7 @@ when isMainModule:
   # This expects SDL2.dll to be in the current directory,
   # available from here: https://www.libsdl.org/download-2.0.php
 
-  import opengl, sdl2, random
+  import opengl, sdl2, random, glbits/models
   from math import TAU, PI, degToRad, cos, sin, arctan2
 
   when defined(debug):
@@ -134,29 +134,9 @@ when isMainModule:
     running = true
   let shaderProg = newModelRenderer()
 
-  proc makeCircleModel(triangles: int, insideCol, outsideCol: GLvectorf4): ModelId =
-    ## Create a coloured model with `triangles` sides.
-    let angleInc = TAU / triangles.float
-    const radius = 1.0
-    var
-      model = newSeq[GLvectorf3](triangles * 3)
-      colours = newSeq[GLvectorf4](triangles * 3)
-      curAngle = 0.0
-      vertex = 0
-    for i in 0 ..< triangles:
-      model[vertex] = vec3(0.0, 0.0, 0.0)
-      colours[vertex] = insideCol
-      model[vertex + 1] = vec3(radius * cos(curAngle), radius * sin(curAngle), 0.0)
-      colours[vertex + 1] = outsideCol
-      curAngle += angleInc
-      model[vertex + 2] = vec3(radius * cos(curAngle), radius * sin(curAngle), 0.0)
-      colours[vertex + 2] = outsideCol
-      vertex += 3
-    newModel(shaderProg, model, colours)
-
   let
-    circleModel = makeCircleModel(10, vec4(1.0, 0.0, 0.0, 1.0), vec4(0.5, 0.0, 0.5, 1.0))
-    squareModel = makeCircleModel(4, vec4(0.0, 1.0, 0.0, 1.0), vec4(0.5, 0.5, 0.0, 1.0))
+    circleModel = shaderProg.makeCircleModel(10, vec4(1.0, 0.0, 0.0, 1.0), vec4(0.5, 0.0, 0.5, 1.0))
+    squareModel = shaderProg.makeCircleModel(4, vec4(0.0, 1.0, 0.0, 1.0), vec4(0.5, 0.5, 0.0, 1.0))
     
     maxCircles = maxEnts
     maxSquares = maxEnts
@@ -173,7 +153,8 @@ when isMainModule:
     if rand(1.0) < 0.1:
       let scale = 0.007
       ents.add newEntityWith(
-        Model(modelId: circleModel, scale: vec3(scale, scale, scale), angle: rand(TAU), col: vec4(rand 1.0, 1.0, 1.0, 1.0)),
+        Model(modelId: circleModel, scale: vec3(scale, scale, scale), angle: rand(TAU),
+          col: vec4(rand 1.0, rand 1.0, 1.0, 1.0)),
         pos,
         Velocity(x: rand(-speed..speed), y: rand(-speed..speed)),
         Spin(rand(-1.0..1.0).degToRad),
@@ -181,7 +162,8 @@ when isMainModule:
     else:
       let scale = 0.004
       ents.add newEntityWith(
-        Model(modelId: squareModel, scale: vec3(scale, scale, scale), angle: rand(TAU), col: vec4(rand 1.0, 1.0, 0.0, 1.0)),
+        Model(modelId: squareModel, scale: vec3(scale, scale, scale), angle: rand(TAU),
+          col: vec4(rand 1.0, rand 1.0, rand 1.0, 1.0)),
         pos,
         Velocity(x: rand(-speed..speed), y: rand(-speed..speed)),
         Spin(rand(-1.0..1.0).degToRad),
