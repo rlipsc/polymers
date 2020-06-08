@@ -14,23 +14,36 @@ template defineOpenGlRenders*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions) 
       Position = object
         x*, y*, z*: float
 
-  defineSystem("updateModelData", [Model, Position], sysOpts)
+  defineSystem("updateModelData", [Model, Position], sysOpts):
+    curModelCount {.pub.}: seq[int]
 
   makeSystemBody("updateModelData"):
+    # This system populates the instance buffers and keeps track of
+    # how many instances need to be rendered per model.
     start:
-      var curPositions = newSeq[int](modelCount())
+      # Reset model counters.
+      sys.curModelCount.setLen modelCount()
+      for i in 0 ..< sys.curModelCount.len:
+        sys.curModelCount[i] = 0
     all:
-      # Fill the buffers for this model.
+      # Populate instance buffers.
       let
         mId = item.model.modelId
-        curPos = curPositions[mId.int]
+        curPos = sys.curModelCount[mId.int]
 
       mId.positionVBOArray[curPos] = vec3(item.position.x, item.position.y, item.position.z)
       mId.scaleVBOArray[curPos] = item.model.scale
       mId.rotationVBOArray[curPos] = [item.model.angle]
       mId.colVBOArray[curPos] = item.model.col
-      curPositions[mId.int] = curPos + 1
 
+      sys.curModelCount[mId.int].inc
+
+  proc renderActiveModels* =
+    ## Render only models that have been processed by `updateModelData`.
+    for modelIndex in 0 ..< modelCount():
+      let model = modelByIndex(modelIndex)
+      if modelIndex < sysUpdateModelData.curModelCount.len:
+        renderModel(model, sysUpdateModelData.curModelCount[modelIndex])
 
 
 when isMainModule:
@@ -191,7 +204,7 @@ when isMainModule:
     glClear(GL_COLOR_BUFFER_BIT or GL_DEPTH_BUFFER_BIT)
 
     run()
-    renderModels()
+    renderActiveModels()
 
     glFlush()
     window.glSwapWindow() # Swap the front and back frame buffers (double buffering)
