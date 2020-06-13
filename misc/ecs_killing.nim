@@ -15,8 +15,8 @@ template defineKilling*(componentOptions: static[ECSCompOptions], systemOptions:
         startTime: float
       Killed* = object
   
-  KillAfter.onAdd:
-    curComponent.startTime = epochTime()
+  KillAfter.onInit:
+    curComponent.startTime = cpuTime()
 
   defineSystem("killAfter", [KillAfter], systemOptions)
   defineSystem("deleteKilled", [Killed], systemOptions)
@@ -25,7 +25,7 @@ template defineKilling*(componentOptions: static[ECSCompOptions], systemOptions:
   # This system's run order is fairly independent so hasn't been separated out to another template.
   makeSystemBody("killAfter"):
     start:
-      let curTime = epochTime()
+      let curTime = cpuTime()
     all:
       if curTime - item.killAfter.startTime >= item.killAfter.duration:
         item.entity.addComponent Killed()
