@@ -1,7 +1,8 @@
 import polymorph
 
-template defineOpenGlRenders*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions) {.dirty.} =
-  import opengl, glbits/modelrenderer
+template defineOpenGlRenders*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions, positionType: typedesc) {.dirty.} =
+  import opengl, glbits
+  from strutils import toLowerAscii
 
   registerComponents(compOpts):
     type
@@ -11,32 +12,38 @@ template defineOpenGlRenders*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions) 
         angle*: GLfloat
         col*: GLvectorf4
 
-      Position = object
-        x*, y*, z*: float
+      #Position* = object
+      #  x*, y*, z*: float
 
-  defineSystem("updateModelData", [Model, Position], sysOpts):
-    curModelCount {.pub.}: seq[int]
+  macro genOpenGlSystems =
+    let
+      posIdent = ident ($positionType).toLowerAscii
 
-  makeSystemBody("updateModelData"):
-    # This system populates the instance buffers and keeps track of
-    # how many instances need to be rendered per model.
-    start:
-      # Reset model counters.
-      sys.curModelCount.setLen modelCount()
-      for i in 0 ..< sys.curModelCount.len:
-        sys.curModelCount[i] = 0
-    all:
-      # Populate instance buffers.
-      let
-        mId = item.model.modelId
-        curPos = sys.curModelCount[mId.int]
+    quote do:
+      defineSystem("updateModelData", [Model, positionType], sysOpts):
+        curModelCount {.pub.}: seq[int]
 
-      mId.positionVBOArray[curPos] = vec3(item.position.x, item.position.y, item.position.z)
-      mId.scaleVBOArray[curPos] = item.model.scale
-      mId.rotationVBOArray[curPos] = [item.model.angle]
-      mId.colVBOArray[curPos] = item.model.col
+      makeSystemBody("updateModelData"):
+        # This system populates the instance buffers and keeps track of
+        # how many instances need to be rendered per model.
+        start:
+          # Reset model counters.
+          sys.curModelCount.setLen modelCount()
+          for i in 0 ..< sys.curModelCount.len:
+            sys.curModelCount[i] = 0
+        all:
+          # Populate instance buffers.
+          let
+            mId = item.model.modelId
+            curPos = sys.curModelCount[mId.int]
+          mId.positionVBOArray[curPos] = vec3(item.`posIdent`.x, item.`posIdent`.y, item.`posIdent`.z)
+          mId.scaleVBOArray[curPos] = item.model.scale
+          mId.rotationVBOArray[curPos] = [item.model.angle]
+          mId.colVBOArray[curPos] = item.model.col
 
-      sys.curModelCount[mId.int].inc
+          sys.curModelCount[mId.int].inc
+
+  genOpenGlSystems()
 
   proc renderActiveModels* =
     ## Render only models that have been processed by `updateModelData`.
@@ -44,6 +51,13 @@ template defineOpenGlRenders*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions) 
       let model = modelByIndex(modelIndex)
       if modelIndex < sysUpdateModelData.curModelCount.len:
         renderModel(model, sysUpdateModelData.curModelCount[modelIndex])
+
+template defineOpenGlRenders*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions) {.dirty.} =
+  registerComponents(compOpts):
+    type
+      Position* = object
+        x*, y*, z*: float
+  defineOpenGlRenders(compOpts, sysOpts, Position)
 
 
 when isMainModule:
@@ -55,9 +69,9 @@ when isMainModule:
   from math import TAU, PI, degToRad, cos, sin, arctan2
 
   when defined(debug):
-    const maxEnts = 80_000
+    const maxEnts = 150_000
   else:
-    const maxEnts = 300_000
+    const maxEnts = 400_000
   const
     compOpts = fixedSizeComponents(maxEnts)
     sysOpts = fixedSizeSystem(maxEnts)
