@@ -12,8 +12,9 @@ template defineKilling*(componentOptions: static[ECSCompOptions], systemOptions:
       KillAfter* = object
         duration*: float
         ## Set automatically.
-        startTime: float
+        startTime*: float
       Killed* = object
+        source*: EntityRef
   
   KillAfter.onInit:
     curComponent.startTime = cpuTime()
