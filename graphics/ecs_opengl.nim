@@ -12,14 +12,10 @@ template defineOpenGlRenders*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions, 
         angle*: GLfloat
         col*: GLvectorf4
 
-      #Position* = object
-      #  x*, y*, z*: float
-
   macro genOpenGlSystems =
-    let
-      posIdent = ident ($positionType).toLowerAscii
-
-    quote do:
+    let posIdent = ident ($positionType).toLowerAscii
+    
+    result = newStmtList(quote do:
       defineSystem("updateModelData", [Model, positionType], sysOpts):
         curModelCount {.pub.}: seq[int]
 
@@ -38,10 +34,11 @@ template defineOpenGlRenders*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions, 
             curPos = sys.curModelCount[mId.int]
           mId.positionVBOArray[curPos] = vec3(item.`posIdent`.x, item.`posIdent`.y, item.`posIdent`.z)
           mId.scaleVBOArray[curPos] = item.model.scale
-          mId.rotationVBOArray[curPos] = [item.model.angle]
+          mId.rotationVBOArray[curPos] = [item.model.access.angle]
           mId.colVBOArray[curPos] = item.model.col
 
           sys.curModelCount[mId.int].inc
+    )
 
   genOpenGlSystems()
 
@@ -76,6 +73,7 @@ when isMainModule:
     compOpts = fixedSizeComponents(maxEnts)
     sysOpts = fixedSizeSystem(maxEnts)
     entOpts = fixedSizeEntities(maxEnts)
+
   defineOpenGlRenders(compOpts, sysOpts)
 
   registerComponents(compOpts):
