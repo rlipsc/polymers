@@ -36,7 +36,7 @@
   Uses glbits to draw the models, found here: https://github.com/rlipsc/glbits
 ]#
 
-import polymorph, polymers, glbits/[modelrenderer, models], opengl, sdl2, random
+import polymorph, polymers, glbits/modelrenderer, opengl, sdl2, random
 from math import TAU, PI, degToRad, cos, sin, `mod`, sqrt, exp
 from times import cpuTime
 
@@ -47,8 +47,8 @@ when defined(debug):
     particleScale = 0.008
 else:
   const
-    maxEnts = 300_000
-    particleScale = 0.008
+    maxEnts = 250_000
+    particleScale = 0.007
 const
   compOpts = fixedSizeComponents(maxEnts)
   sysOpts = fixedSizeSystem(maxEnts)
@@ -162,12 +162,12 @@ makeSystemOpts("changeBlendInRadius", [CheckRadius, ColourBlend], sysOpts):
       let
         normDist = item.checkRadius.insideDist / item.checkRadius.radius
         brightening = item.colourBlend.brightening
-        # Linear colour effect from mouse.
+        # Linear colour drop off from mouse.
         mixShift = dt * brightening * (1.0 - normDist)
-        # Alternative curved colour effect from mouse.
+        # Alternative curved colour drop off from mouse.
         #value = 1.0 / (exp(5.0 * (normDist * normDist)))
         #mixShift = dt * brightening * value
-      item.colourBlend.mix = max(0.0, item.colourBlend.mix + mixShift)
+      item.colourBlend.mix = clamp(item.colourBlend.mix + mixShift, 0.0, 1.0)
 
 makeSystemOpts("updateModelWithBlend", [BlendModel, ColourBlend, Model], sysOpts):
   all:
@@ -312,57 +312,61 @@ when defined(showFPS):
     t1 = cpuTime()
     fc: int
 
-# Render loop.
-while running:
-  while pollEvent(evt):
-    if evt.kind == QuitEvent:
-      running = false
-      break
-    if evt.kind == MouseMotion:
-      let
-        mm = evMouseMotion(evt)
-        normX = mm.x.float / screenWidth.float
-        normY = 1.0 - (mm.y.float / screenHeight.float)
-      mousePos[0] = (normX * 2.0) - 1.0
-      mousePos[1] = (normY * 2.0) - 1.0
-      # Update system with the new mouse position
-      sysCheckRadius.sourcePos = mousePos
-      sysGatherGrabbed.sourcePos = mousePos
+proc main =
+  echo "Using ", maxEnts, " entities."
+  # Render loop.
+  while running:
+    while pollEvent(evt):
+      if evt.kind == QuitEvent:
+        running = false
+        break
+      if evt.kind == MouseMotion:
+        let
+          mm = evMouseMotion(evt)
+          normX = mm.x.float / screenWidth.float
+          normY = 1.0 - (mm.y.float / screenHeight.float)
+        mousePos[0] = (normX * 2.0) - 1.0
+        mousePos[1] = (normY * 2.0) - 1.0
+        # Update system with the new mouse position
+        sysCheckRadius.sourcePos = mousePos
+        sysGatherGrabbed.sourcePos = mousePos
 
-    # Handle grabbing.  
-    if evt.kind == MouseButtonDown:
-      var mb = evMouseButton(evt)
-      if mb.button == BUTTON_LEFT:
-        sysGrab.grabForce = 0.025
-        # Active system to start tagging entities as Grabbed within CheckRadius.
-        sysGrab.paused = false
-    if evt.kind == MouseButtonUp:
-      var mb = evMouseButton(evt)
-      if mb.button == BUTTON_LEFT:
-        sysGrab.paused = true
-        # Active system to remove Grabbed from all entities that have it.
-        # Deactivates itself when completed.
-        sysReleaseGrabbed.paused = false
+      # Handle grabbing.  
+      if evt.kind == MouseButtonDown:
+        var mb = evMouseButton(evt)
+        if mb.button == BUTTON_LEFT:
+          sysGrab.grabForce = 0.005
+          # Active system to start tagging entities as Grabbed within CheckRadius.
+          sysGrab.paused = false
+      if evt.kind == MouseButtonUp:
+        var mb = evMouseButton(evt)
+        if mb.button == BUTTON_LEFT:
+          sysGrab.paused = true
+          # Active system to remove Grabbed from all entities that have it.
+          # Deactivates itself when completed.
+          sysReleaseGrabbed.paused = false
 
-    if evt.kind == WindowEvent:
-      var windowEvent = cast[WindowEventPtr](addr(evt))
-      if windowEvent.event == WindowEvent_Resized:
-        screenWidth = windowEvent.data1
-        screenHeight = windowEvent.data2
-        glViewport(0, 0, screenWidth, screenHeight)
+      if evt.kind == WindowEvent:
+        var windowEvent = cast[WindowEventPtr](addr(evt))
+        if windowEvent.event == WindowEvent_Resized:
+          screenWidth = windowEvent.data1
+          screenHeight = windowEvent.data2
+          glViewport(0, 0, screenWidth, screenHeight)
 
-  glClear(GL_COLOR_BUFFER_BIT or GL_DEPTH_BUFFER_BIT)
+    glClear(GL_COLOR_BUFFER_BIT or GL_DEPTH_BUFFER_BIT)
 
-  run()
-  renderModels()
+    run()
+    renderModels()
 
-  when defined(showFPS):
-    fc += 1
+    when defined(showFPS):
+      fc += 1
 
-    let t2 = cpuTime()
-    if t2 - t1 > 1.0:
-      echo "FPS: ", fc
-      t1 = cpuTime()
-      fc = 0
+      let t2 = cpuTime()
+      if t2 - t1 > 1.0:
+        echo "FPS: ", fc
+        t1 = cpuTime()
+        fc = 0
 
-  window.glSwapWindow()
+    window.glSwapWindow()
+
+main()
