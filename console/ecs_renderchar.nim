@@ -153,13 +153,17 @@ template defineRenderChar*(componentOptions: static[ECSCompOptions], systemOptio
   template clear*(sys: var RenderCharSystem, renderInst: RenderCharInstance): untyped =
     ## Clears current position if this render instance is currently being displayed.
     ## Note that if the RenderChar isn't actually deleted, it will be re-added in the update system.
-    if renderInst.index.validCharIdx and sys.states[renderInst.index].render == renderInst:
-      sys.clear(renderInst.index)
+    sys.clear(renderInst.index)
 
-  template clearLastPos*(sys: var RenderCharSystem, renderInst: RenderCharInstance): untyped =
-    ## Clears last calculated position if this render instance is currently being displayed.
-    if renderInst.lastIndex.validCharIdx and sys.states[renderInst.lastIndex].render == renderInst:
-      sys.clear(renderInst.lastIndex)
+  template setChar*(sys: var RenderCharSystem, renderInst: RenderCharInstance): untyped =
+    ## Forces a particular character to the display.
+    if renderInst.index.validCharIdx:
+      sys.states[renderInst.index].render = renderInst
+      sys.states[renderInst.index].state = csCharacter
+      # Update the state's item count.
+      sys.states[renderInst.index].count += 1
+
+  template setChar*(renderInst: RenderCharInstance): untyped = sysRenderChar.setChar(renderInst)
 
   template charPos*(x, y: float, hWidth, hHeight: int): tuple[x, y: int] =
     ## Returns cell coordinates of render.
@@ -171,20 +175,23 @@ template defineRenderChar*(componentOptions: static[ECSCompOptions], systemOptio
     charPos(render.x, render.y, sys.hWidth, sys.hHeight)
     
   template validCharIdx*(sys: RenderCharSystem, index: int): bool = index in 0 ..< sys.states.len
-  template charPosIndex*(sys: RenderCharSystem, x, y: int): int = y * sys.width + x
-  proc charPosIndex*(sys: RenderCharSystem, pos: tuple[x, y: int]): int {.inline.} = sys.charPosIndex(pos.x, pos.y)
-  template charPosIndex*(sys: RenderCharSystem, x, y: float): int = 
-    sys.charPos(x, y, sys.hWidth, sys.hHeight).charPosIndex
 
-  template charPos*(x, y: float): tuple[x, y: int] = charPos(x, y, sysRenderChar.hWidth, sysRenderChar.hHeight)
-
+  template clearLastPos*(sys: var RenderCharSystem, renderInst: RenderCharInstance): untyped =
+    ## Clears last calculated position if this render instance is currently being displayed.
+    if renderInst.lastIndex.validCharIdx and sys.states[renderInst.lastIndex].render == renderInst:
+      sys.clear(renderInst.lastIndex)
   template clear*(index: int): untyped = sysRenderChar.clear(index)
   template clear*(renderInst: RenderCharInstance): untyped = sysRenderChar.clear(renderInst)
   template clearLastPos*(renderInst: RenderCharInstance): untyped = sysRenderChar.clearLastPos(renderInst)
 
+  template charPosIndex*(sys: RenderCharSystem, x, y: int): int = y * sys.width + x
+  proc charPosIndex*(sys: RenderCharSystem, pos: tuple[x, y: int]): int {.inline.} = sys.charPosIndex(pos.x, pos.y)
+  template charPosIndex*(sys: RenderCharSystem, x, y: float): int = charPos(x, y, sys.hWidth, sys.hHeight).charPosIndex
+  template charPos*(x, y: float): tuple[x, y: int] = charPos(x, y, sysRenderChar.hWidth, sysRenderChar.hHeight)
   template charPos*(render: RenderCharInstance): tuple[x, y: int] = sysRenderChar.charPos(render)
   template validCharIdx*(index: int): bool = sysRenderChar.validCharIdx(index)
   template charPosIndex*(x, y: int): int = y * sysRenderChar.width + x
+  template charPosIndex*(x, y: float): int = charPos(x, y, sysRenderChar.hWidth, sysRenderChar.hHeight).charPosIndex
   proc charPosIndex*(pos: tuple[x, y: int]): int = sysRenderChar.charPosIndex(pos.x, pos.y)
 
   template charIndexCoord*(sys: RenderCharSystem, index: int): tuple[x, y: float] =
@@ -196,6 +203,10 @@ template defineRenderChar*(componentOptions: static[ECSCompOptions], systemOptio
     (x: sx, y: sy)
 
   template charIndexCoord*(index: int): untyped = sysRenderChar.charIndexCoord(index)
+
+  proc updateIndex*(render: RenderCharInstance | var RenderChar) =
+    ## Updates the index in `render` according to it's x and y.
+    render.index = sysRenderChar.charPosIndex(render.x, render.y)
 
   template normaliseCharCoords*(x, y: int): tuple[x, y: float] =
     ## Converts character coordinates to normalised -1.0 .. 1.0 space.
@@ -484,152 +495,3 @@ template addRenderCharSystems*: untyped =
   addRenderCharUpdate()
   addRenderCharOutput()
 
-when isMainModule:
-
-  # Simple demo of bouncing chars
-
-  import random
-  from math import cos, sin, TAU, sqrt, arctan2, degToRad
-  
-  const
-    # Try with a million entities and -d:release -d:danger
-    # RenderChar uses the numerically highest colours when drawing. 
-    maxEnts = 1000
-    entOpts = dynamicSizeEntities()
-    compOpts = dynamicSizeComponents()
-    sysOpts = dynamicSizeSystem()
-    sysEvery = ECSSysOptions(timings: stRunEvery)
-  defineRenderChar(compOpts, sysOpts)
-  addRenderCharSystems()
-
-  registerComponents(compOpts):
-    type Velocity = object
-      x, y, maxSpeed: float
-
-  # Some support math
-  type Vect = tuple[x, y: float]
-  proc dot*(a, b: Vect):float = a[0] * b[0] + a[1] * b[1]
-  proc `-`(a: Vect, b: Vect): Vect = (a.x - b.x, a.y - b.y)
-  proc `*`(a: float, b: Vect): Vect = (a * b.x, a * b.y)
-  proc reflect*(I, N: Vect): Vect = I - 2.0 * dot(N, I) * N
-
-  makeSystemOpts("nBody", [RenderChar, Velocity], sysEvery):
-    all:
-      if item.renderChar.index.validCharIdx:
-        let
-          us = item.renderChar
-          them = sysRenderChar.states[us.index].render
-          gravity = 0.02
-        if us != them:
-          let theirEnt = sysRenderChar.states[us.index].entity
-          if theirEnt.alive:
-            let theirVel = theirEnt.fetchComponent Velocity
-            if theirVel.valid:
-              
-              let
-                v = item.velocity
-                diff = (x: us.x - them.x, y: us.y - them.y)
-                #diff = (x: v.x, y: v.y)
-                length = max(0.01, sqrt(diff.x * diff.x + diff.y * diff.y))
-                normal1 = (x: diff.x / length, y: diff.y / length)
-                r1 = reflect((v.x, v.y), normal1)
-              
-                normal2 = (x: -normal1.x, y: -normal1.y)
-                r2 = reflect((diff.x, diff.y), normal2)
-              
-              const decay = 0.4
-              
-              v.x = r1.x * decay
-              v.y = r1.y * decay
-              theirVel.x = r2.x * decay
-              theirVel.y = r2.y * decay
-            
-              let aboveIdx = us.index - sysRenderChar.width
-              if aboveIdx.validCharIdx:
-                let pos = aboveIdx.indexCentre
-                item.renderChar.x = pos.x
-                item.renderChar.y = pos.y
-                #v.y = v.y * decay
-            else:
-              # What we hit didn't have a velocity.
-              item.velocity.x *= -0.6
-              item.velocity.y *= -0.6        
-
-        let
-          belowIdx = us.index + sysRenderChar.width
-          leftIdx = us.index - 1
-          rightIdx = us.index + 1
-          lowerLim = -1.0 + sysRenderChar.charWidth
-          upperLim =  1.0 - sysRenderChar.charWidth
-        if belowIdx.validCharIdx and sysRenderChar.states[belowIdx].state != csCharacter:
-            item.renderChar.y += gravity
-        elif item.renderChar.index mod 2 == 1:
-          if item.renderChar.x > lowerLim and leftIdx.validCharIdx and sysRenderChar.states[leftIdx].state != csCharacter:
-            item.renderChar.x -= gravity
-        elif item.renderChar.x < upperLim and rightIdx.validCharIdx and sysRenderChar.states[rightIdx].state != csCharacter:
-            item.renderChar.x += gravity
-        item.renderChar.x += item.velocity.x
-        item.renderChar.y += item.velocity.y
-
-  makeSystemOpts("constrainArea", [RenderChar, Velocity], sysEvery):
-    all:
-      let
-        lowCentre = 0.indexCentre
-        highCentre = sysRenderChar.states.high.indexCentre
-      const
-        # Wall normals
-        left = (1.0, 0.0)
-        right = (-1.0, 0.0)
-        top = (0.0, 1.0)
-        bottom = (0.0, -1.0)
-
-      template reflect(normal: Vect) =
-        let
-          r = reflect((item.velocity.x, item.velocity.y), normal)
-          decay = rand 0.1..0.199
-        item.velocity.x = r.x * decay
-        item.velocity.y = r.y * decay
-      
-      if item.renderChar.x < lowCentre.x:
-        item.renderChar.x = lowCentre.x
-        reflect(left)
-      elif item.renderChar.x > highCentre.x:
-        item.renderChar.x = highCentre.x
-        reflect(right)
-      if item.renderChar.y < lowCentre.y:
-        item.renderChar.y = lowCentre.y
-        reflect(top)
-      elif item.renderChar.y > highCentre.y:
-        item.renderChar.y = highCentre.y
-        reflect(bottom)
-      
-  makeEcs(entOpts)
-  commitSystems("run")
-  ####################
-
-  sysRenderChar.setDimensions(70, 35)
-  eraseScreen()
-  setCursorYPos 0
-
-  let updateRate = 1.0 / 60.0
-  sysNBody.runEvery = updateRate
-  sysConstrainArea.runEvery = updateRate
-  
-  let
-    speedJitter = 0.0005
-    speedStart = 0.0001
-    speedRange = speedStart .. speedStart + speedJitter
-    startArea = -0.5..0.5
-  for i in 0..<maxEnts:
-    let
-      angle = rand TAU
-      speed = rand speedRange
-      fgCol = rand fgRed .. fgWhite
-      bgCol = rand bgBlack .. bgCyan
-      intense = if rand(0..1) == 1: true else: false
-    discard newEntityWith(
-      RenderChar(x: rand startArea, y: rand startArea, character: rand 'a'..'z', colour: fgCol, backgroundColour: bgCol, foreIntensity: intense),
-      Velocity(x: speed * cos(angle), y: speed * sin(angle), maxSpeed: 0.05)
-      )
-  while true:
-    run()
