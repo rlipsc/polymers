@@ -1,7 +1,7 @@
 import polymorph
 
 template defineOpenGlRenders*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions, positionType: typedesc) {.dirty.} =
-  import opengl, glbits
+  import opengl, glbits, glbits/modelrenderer
   from strutils import toLowerAscii
 
   registerComponents(compOpts):
@@ -42,12 +42,23 @@ template defineOpenGlRenders*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions, 
 
   genOpenGlSystems()
 
-  proc renderActiveModels* =
+  iterator activeModels*: tuple[model: ModelId, count: int] =
     ## Render only models that have been processed by `updateModelData`.
     for modelIndex in 0 ..< modelCount():
-      let model = modelByIndex(modelIndex)
       if modelIndex < sysUpdateModelData.curModelCount.len:
-        renderModel(model, sysUpdateModelData.curModelCount[modelIndex])
+        let count = sysUpdateModelData.curModelCount[modelIndex]
+        if count > 0:
+          yield (modelByIndex(modelIndex), count)
+
+  proc renderActiveModels* =
+    ## Render only models that have been processed by `updateModelData`.
+    for modelInfo in activeModels():
+      renderModel(modelInfo.model, modelInfo.count)
+
+  template renderActiveModelsSetup*(setup: untyped) =
+    ## Render only models that have been processed by `updateModelData`.
+    for modelInfo in activeModels():
+      renderModelSetup(modelInfo.model, modelInfo.count, setup)
 
 template defineOpenGlRenders*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions) {.dirty.} =
   registerComponents(compOpts):
@@ -62,7 +73,7 @@ when isMainModule:
   # This expects SDL2.dll to be in the current directory,
   # available from here: https://www.libsdl.org/download-2.0.php
 
-  import opengl, sdl2, random, glbits/models
+  import opengl, sdl2, random, glbits/modelrenderer
   from math import TAU, PI, degToRad, cos, sin, arctan2
 
   when defined(debug):
@@ -122,7 +133,6 @@ when isMainModule:
         reactSpeed = speed
       item.velocity.x = reactSpeed * cos(reactAngle)
       item.velocity.y = reactSpeed * sin(reactAngle)
-
 
   makeSystemOptFields("attractMouse", [Position, Velocity, AttractToMouse], sysOpts) do:
     mousePos: GLvectorf2
