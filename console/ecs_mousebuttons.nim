@@ -1,7 +1,7 @@
-import polymorph, polymers
+import polymorph
 
 template defineMouseButtons*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions) {.dirty.} =
-  from math import floor
+  import terminal
 
   type
     ButtonBackground* = object
@@ -32,8 +32,6 @@ template defineMouseButtons*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions) {
         handler*: proc(entity: EntityRef, button: MouseButtonInstance)
 
       MouseButtonMouseOver* = object
-      MouseButtonClicked* = object
-        mouseButton*: int
       
       ## Tag an entity to draw a character at the mouse cursor's position.
       DrawMouse* = object
@@ -72,7 +70,7 @@ template defineMouseButtons*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions) {
 
   makeSystemOpts("mouseOverChar", [MouseMoved], sysOpts):
     all:
-      # Checks mouse position against the entity in RenderChar.states.
+      # Finds the active entity in RenderChar.states matching the mouse pos.
       let
         pos = item.mouseMoved.position
         charIdx = charPosIndex(pos.x.int, pos.y.int)
@@ -87,13 +85,15 @@ template defineMouseButtons*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions) {
 
   makeSystemOpts("clickedButton", [MouseButton, MouseButtonPress], sysOpts):
     all:
-      # React to a button being clicked on.
+      # Extend MouseButtonPress to invoke a callback when over the button.
       template mb: untyped = item.mouseButton
       if mb.mouseOver:
         
         mb.clicked = true
+        
         if mb.toggle:
           mb.forceFocus = not mb.forceFocus
+        
         if mb.handler != nil:
           mb.access.handler(item.entity, mb)
       item.entity.removeComponent MouseButtonPress
@@ -148,7 +148,7 @@ template defineMouseButtons*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions) {
       for y in 0 ..< size.y:
         for x in 0 ..< size.x:
           let character = chars[(size.x * y) + x]
-                    
+          
           character.rc.x = mb.x + leftCorner.x + x.float * cw
           character.rc.y = mb.y + leftCorner.y + y.float * ch
           character.rc.backgroundColour = background.colour
@@ -166,148 +166,4 @@ template defineMouseButtons*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions) {
           else:
             character.rc.character = background.character
             character.bc.charType = bctBackground
-
-when isMainModule:
-
-  #[
-    In this demo we show the mouse button in action, but also
-    how it might be extended. We create an AnimateChar component
-    that we would like to animate just part of the button; background,
-    border or text.
-
-    To do this, we use a setup component that we add to buttons we want
-    to animate, which triggers a system to apply the animate component
-    to a MouseButton's characters before remove the setup component.
-
-    This allows us to `hook` a button's creation and apply our own components
-    to it's character entities/
-  ]#
-  
-  import times
-
-  const
-    maxEnts = 20_000
-    entOpts = ECSEntityOptions(maxEntities: maxEnts)
-    compOpts = ECSCompOptions(maxComponents: maxEnts)
-    sysOpts = ECSSysOptions(maxEntities: maxEnts)
-
-  var terminate: bool
-
-  defineRenderChar(compOpts, sysOpts)
-  defineConsoleEvents(compOpts, sysOpts)
-  defineMouseButtons(compOpts, sysOpts)
-
-  registerComponents(compOpts):
-    type
-      AnimateChar = object
-        charType: ButtonCharType
-        chars: seq[char]
-        frameIndex: int
-        duration: float
-        lastUpdate: float
-      ApplyAnimateChar = object
-        animation: AnimateChar
-
-  makeSystem("quit", [KeyDown]):
-    all:
-      if 27 in item.keyDown.codes:
-        terminate = true
-
-  makeSystem("resize", [WindowEvent]):
-    all:
-      let pos = item.windowEvent.size
-      if pos.x.int > 0 and pos.y.int > 0:
-        sysRenderChar.setDimensions pos.x, pos.y
-        sysRenderString.setDimensions pos.x, pos.y
-      item.entity.removeComponent WindowEvent
-
-  makeSystemOpts("animateButtons", [ApplyAnimateChar, MouseButton], sysOpts):
-    all:
-      # We need a way to apply AnimateChar to MouseButton automatically but
-      # without constantly doing it. This system performs the setup from a button
-      # then removes it's activating component.
-      if item.mouseButton.characters.len > 0:
-        # Monitor until the button has been set up.
-        for b in item.mouseButton.characters:
-          if item.applyAnimateChar.animation.charType == b.bc.charType:
-            b.entity.addComponent item.applyAnimateChar.animation
-        item.entity.removeComponent ApplyAnimateChar
-
-  # We want the animate system to run after MouseButton system has updated it's RenderChars,
-  # but before they're actually rendered.
-  makeSystemOpts("animate", [AnimateChar, ButtonChar, RenderChar], sysOpts):
-    start:
-      let curTime = epochTime()
-    all:
-      # Change button characters over time.
-      item.renderChar.character = item.animateChar.chars[item.animateChar.frameIndex]
-      if curTime - item.animateChar.lastUpdate > item.animateChar.duration:
-        item.animateChar.lastUpdate = curTime
-        item.animateChar.frameIndex = (item.animateChar.frameIndex + 1) mod item.animateChar.chars.len
-  
-  makeEcs(entOpts)
-  
-  ##### ECS defined #####
-
-  addRenderCharSystems()
-  addConsoleEventSystems()
-
-  commitSystems("run")
-  
-  ##### Systems built #####
-
-  let mouseCursor = newEntityWith(KeyChange(), MouseMoving(), DrawMouse(), WindowChange())
-  
-  proc updateButton(entity: EntityRef, button: MouseButtonInstance) =
-    if button.forceFocus:
-      button.text = "On"
-      
-    else:
-      button.text = "Off"
-
-  let
-    mb = MouseButton(
-      text: "Click me",
-      toggle: true,
-      background: (
-        focused: ButtonBackground(character: '.', colour: bgRed),
-        unFocused: ButtonBackground(character: '.', colour: bgBlue)),
-      border: (
-        visible: true,
-        focused: ButtonBackground(character: '*', colour: bgYellow),
-        unFocused: ButtonBackground(character: '/', colour: bgBlue)),
-      size: (10, 5), x: 0.0, y: 0.0,
-      handler: updateButton
-      )
-    animation = AnimateChar(duration: 1.0, charType: bctBackground, chars: @['a', 'b', 'c'])
-  var buttonTemplate: ComponentList
-  
-  buttonTemplate.add ApplyAnimateChar(animation: animation)
-  buttonTemplate.add ConsoleInput()
-  buttonTemplate.add mb
-
-  
-  from math import cos, sin, TAU
-  
-  # A circle of buttons from the above template.
-  let
-    buttons = 6
-    angleInc = TAU / buttons.float
-  var angle: float
-  for i in 0..<buttons:
-    let
-      radius = 0.25
-      x = radius * cos angle
-      y = radius * sin angle
-      # Create the button.
-      button = buttonTemplate.construct
-      b = button.fetchComponent MouseButton
-    b.x = x
-    b.y = y
-    angle += angleInc
-
-  eraseScreen()
-  setCursorPos 0, 0
-  while not terminate:
-    run()
 
