@@ -32,6 +32,7 @@ template defineMouseButtons*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions) {
         handler*: proc(entity: EntityRef, button: MouseButtonInstance)
 
       MouseButtonMouseOver* = object
+      MouseButtonClicked* = object
       
       ## Tag an entity to draw a character at the mouse cursor's position.
       DrawMouse* = object
@@ -96,7 +97,8 @@ template defineMouseButtons*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions) {
         
         if mb.handler != nil:
           mb.access.handler(item.entity, mb)
-      item.entity.removeComponent MouseButtonPress
+      entity.addOrUpdate MouseButtonClicked()
+      entity.removeComponent MouseButtonPress
 
   makeSystemOpts("drawButtons", [MouseButton], sysOpts):
     start:
