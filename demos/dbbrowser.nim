@@ -89,6 +89,7 @@ makeEcs(entOpts)
 ################
 
 template newEntry(textStr: string, coord: tuple[x, y: float]): tuple[ent: EntityRef, rs: RenderStringInstance] =
+  # Create an entity with the given text as RenderString.
   let
     ent = newEntityWith(RenderString(text: textStr, x: coord[0], y: coord[1]))
     rs = ent.fetchComponent RenderString
@@ -102,9 +103,9 @@ template clear(list: DisplayRow): untyped =
 template clear(displayData: DisplayDataInstance): untyped =
   displayData.titles.clear
   displayData.headers.clear
-  for i in 0 ..< displayData.access.rows.len:
-    displayData.access.rows[i].clear
-  displayData.access.rows.setLen 0
+  for i in 0 ..< displayData.rows.len:
+    displayData.rows[i].clear
+  displayData.rows.setLen 0
   displayData.updated = false
 
 makeSystem("resize", [WindowEvent]):
@@ -126,7 +127,6 @@ makeSystem("updateCursorPos", [EditString, RenderString]):
 
 makeSystem("fetchTables", [DatabaseConnection, FetchTables]):
   all:
-    # Takes FetchTables and adds Tables
     template con: untyped = item.databaseConnection.connection
     entity.addOrUpdate Tables()
     entity.addOrUpdate QueryResult(title: "Available Tables",
@@ -141,7 +141,6 @@ makeSystem("fetchTables", [DatabaseConnection, FetchTables]):
 
 makeSystem("fetchTableFields", [DatabaseConnection, FetchTableFields]):
   all:
-    # Takes FetchTables and adds Tables
     template con: untyped = item.databaseConnection.connection
     let
       table = item.fetchTableFields.table
@@ -168,14 +167,13 @@ makeSystem("fetchTableData", [DatabaseConnection, FetchTableData]):
     entity.addOrUpdate QueryResult(
       title: titleStr,
       # Table should be 'trusted' data from info_schema, otherwise
-      # we can get injections.
+      # we can get injections since we can't use parameters here.
       data: con.executeFetch "SELECT TOP 2000 * FROM " & table)
-    #assert false, $item.databaseConnection.connection.reporting.messages
     entity.removeComponent FetchTableData
 
 makeSystem("updateDisplay", [QueryResult, DisplayData]):
   all:
-    # Update DisplayData with data from QueryResult.
+    # Output the query as a table.
     template displayData: untyped = item.displayData
     if not displayData.updated:
       displayData.clear
@@ -215,8 +213,8 @@ makeSystem("updateDisplay", [QueryResult, DisplayData]):
 
 addConsoleEventSystems()
 
-# Turn a RenderString into an edit box.
 makeSystem("inputString", [EditString, KeyDown, RenderString]):
+  # Turn a RenderString into an edit box.
   start:
     let validKeys = 
       if sys.numbersOnly: Digits
@@ -243,9 +241,11 @@ makeSystem("inputString", [EditString, KeyDown, RenderString]):
             xPos = max(xPos - 1, 0)
           entity.consume item.keyDown, i
         of 75:
+          # Left
           xPos = max(xPos - 1, 0)
           entity.consume item.keyDown, i
         of 77:
+          # Right
           xPos = min(curLen - 1, xPos + 1)
           entity.consume item.keyDown, i
         of 28:
@@ -260,7 +260,7 @@ addRenderCharSystems()
 addDatabaseSystems()
 
 proc consume(entity: EntityRef, keyComp: KeyDownInstance | KeyUpInstance, i: int) =
-  ## Remove a key, if empty remove component
+  ## Remove a key, if no keys remove the component.
   keyComp.codes.del i
   keyComp.chars.del i
   keyComp.access.keys.del i
@@ -279,6 +279,7 @@ template processKeys(keyComponent: KeyDownInstance | KeyUpInstance, actions: unt
 
 makeSystem("escape", [EditString, KeyDown]):
   all:
+    # Handles exiting an EditString.
     item.keyDown.processKeys:
       if code == 1:
         sys.escapePressed = true
@@ -383,10 +384,10 @@ proc ask(prompt: string, defaultText = "", x = -1.0, y = -1.0): string =
   let
     inputXOffset = prompt.len.float * sysRenderChar.charWidth
     prmt = newEntityWith(RenderString(text: prompt, x: x, y: y))
-    input = newEntityWith(RenderString(text: defaultText, x: x + inputXOffset, y: y), EditString(), KeyChange())
-  if defaultText.len > 0:
-    let cursor = input.fetchComponent EditString
-    cursor.xPos = defaultText.high
+    cursorPos =
+      if defaultText.len > 0: defaultText.high
+      else: 0
+    input = newEntityWith(RenderString(text: defaultText, x: x + inputXOffset, y: y), EditString(xPos: cursorPos), KeyChange())
   var done: bool
   while not done:
     run()
@@ -398,40 +399,43 @@ proc ask(prompt: string, defaultText = "", x = -1.0, y = -1.0): string =
   input.delete
 
 proc main() =
-  var ctdb = ConnectToDb(
-    host: "",
-    driver: "SQL Server Native Client 11.0",
-    database: "",
-    userName: "",
-    password: "",
-    integratedSecurity: true,
-    reportingLevel: rlErrorsAndInfo,
-    reportDest: {}  # TODO: Report to user.
-  )
 
   eraseScreen()
   setCursorPos 0, 0
+
   let
     hostName = ask("Enter host: ", r"localhost\SQLEXPRESS", y = -1.0)
     dbName = ask("Enter database: ", "master", y = -1.0 + sysRenderChar.charHeight)
+
   if hostName.strip == "":
     quit "Please provide a host to connect to"
+  
   if dbName.strip == "":
     quit "Please provide a database to connect to"
-  ctdb.database = dbName
-  ctdb.host = hostName
   
-  let dbBrowser = newEntityWith(
-    ctdb,
-    FetchTables(),
-    DisplayData(x: -1.0, y: -1.0),
-    LineCursor(lastLine: -1),
-    KeyChange(),
-    WindowChange())
+  let dbBrowser =
+    newEntityWith(
+      ConnectToDb(
+        host: hostName,
+        driver: "SQL Server Native Client 11.0",
+        database: dbName,
+        userName: "",
+        password: "",
+        integratedSecurity: true,
+        reportingLevel: rlErrorsAndInfo,
+        reportDest: {}
+      ),
+      FetchTables(),  # Begin with listing the available tables.
+      DisplayData(x: -1.0, y: -1.0),
+      LineCursor(lastLine: -1),
+      KeyChange(),
+      WindowChange()
+    )
   
   var finished: bool
   while not finished:
     run()
+
     finished = dbBrowser.hasComponent Quit
 
   dbBrowser.delete
