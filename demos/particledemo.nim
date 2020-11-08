@@ -25,8 +25,7 @@
     * Isolated systems focused on single tasks.
     * Combining multiple behaviours together.
     * Changing behaviour by adding/removing components.
-    * Removing a component from a currently iterating system after a time interval.
-    * Adding new fields to system definitions.
+    * Adding custom fields to system definitions.
     * Passing parameters to specific systems by updating system fields.
     * Manually triggering systems for some effect.
     * Systems pausing themselves after completion.
@@ -85,7 +84,7 @@ template bounce(variable: untyped) =
   if item.position.variable < -1.0:
     item.position.variable = -1.0
     item.velocity.variable *= -1.0
-  if item.position.variable > 1.0:
+  elif item.position.variable > 1.0:
     item.position.variable = 1.0
     item.velocity.variable *= -1.0
 
@@ -299,7 +298,7 @@ for i in 0 ..< maxEnts:
       Velocity(x: rand(-speed..speed), y: rand(-speed..speed)),
       AvoidMouse(speed: speed),
       CheckRadius(radius: rand 0.3..0.4),
-      ColourBlend(original: modelCol, blendTo: reactCol, mixSpeed: rand 0.1 .. 0.3, brightening: rand 1.5 .. 4.0),
+      ColourBlend(original: modelCol, blendTo: reactCol, mixSpeed: rand 0.1 .. 0.2, brightening: rand 1.5 .. 5.0),
       BlendModel(),
       Grabbable()
     )
