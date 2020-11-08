@@ -43,6 +43,8 @@ template defineConsoleEvents*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions):
     
   registerComponents(compOpts):
     type
+      ## Add the following components to entities to receive event components.
+      ## 
       ## Tag an entity to receive all console input components when they occur.
       ConsoleInput* = object
       ## Tag an entity to receive KeyEvents, KeyDown and KeyUp.
@@ -58,6 +60,10 @@ template defineConsoleEvents*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions):
       ## Tag an entity to receive changes to the console window size.
       WindowChange* = object
       
+      ## These components are added to entities when their events occur.
+      ## Access them by using them in systems or add them manually to
+      ## trigger events.
+      ## 
       ## All key events.
       KeyEvents* = object
         events*: seq[KeyEvent]
@@ -157,7 +163,6 @@ template addConsoleEventSystems*: untyped =
         numRead: int
         events = getNumberOfConsoleInputEvents(sys.stdInHandle, numRead.addr)
         inputEvents = newSeq[InputEvent](events)
-        windowEvent: bool
         curMousePos: ConsoleCoord
 
       if events > 0:
@@ -194,7 +199,6 @@ template addConsoleEventSystems*: untyped =
             of etWindow:
               let winEvent = event.data.windowEvent
               sys.windowEvent = (true, WindowEvent(size: winEvent.size))
-              windowEvent = true
 
           # Finished with these events.
           doAssert(sys.stdInHandle.flushConsoleInputBuffer != 0)
@@ -249,19 +253,19 @@ template addConsoleEventSystems*: untyped =
 
   makeSystemBody("sendMouseMove"):
     start:
-      sys.paused = sysConsoleEvents.mouseMoved.has
+      sys.paused = not sysConsoleEvents.mouseMoved.has
     all:
       item.entity.addOrUpdate sysConsoleEvents.mouseMoved.event
 
   makeSystemBody("sendMouseClicked"):
     start:
-      sys.paused = sysConsoleEvents.mouseClicked.has
+      sys.paused = not sysConsoleEvents.mouseClicked.has
     all:
       item.entity.addOrUpdate sysConsoleEvents.mouseClicked.event
 
   makeSystemBody("sendWindowEvents"):
     start:
-      sys.paused = sysConsoleEvents.windowEvent.has
+      sys.paused = not sysConsoleEvents.windowEvent.has
     all:
       item.entity.addOrUpdate sysConsoleEvents.windowEvent.event
 
