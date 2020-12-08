@@ -40,7 +40,6 @@ template addDatabaseSystems*: untyped =
       let existingCon = entity.fetchComponent DatabaseConnection
       if existingCon.valid:
         existingCon.connection.freeConnection
-
       var con = newODBCConnection()
       con.host = item.connectToDb.host
       con.driver = item.connectToDb.driver

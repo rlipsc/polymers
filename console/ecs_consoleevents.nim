@@ -55,7 +55,7 @@ template defineConsoleEvents*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions):
       MouseInput* = object
       ## Tag an entity to receive MouseMoved.
       MouseMoving* = object
-      ## Tag an entity to receive MouseButtonClick
+      ## Tag an entity to receive MouseButtonPress
       MouseButtons* = object
       ## Tag an entity to receive changes to the console window size.
       WindowChange* = object

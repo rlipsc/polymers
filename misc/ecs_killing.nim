@@ -7,6 +7,7 @@
 import polymorph
 
 template defineKilling*(componentOptions: static[ECSCompOptions], systemOptions: static[ECSSysOptions]): untyped {.dirty.} =
+
   registerComponents(componentOptions):
     type
       KillAfter* = object
@@ -23,6 +24,7 @@ template defineKilling*(componentOptions: static[ECSCompOptions], systemOptions:
   defineSystem("deleteKilled", [Killed], systemOptions)
 
   import times
+
   # This system's run order is fairly independent so hasn't been separated out to another template.
   makeSystemBody("killAfter"):
     start:

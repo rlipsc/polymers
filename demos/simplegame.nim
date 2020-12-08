@@ -4,7 +4,6 @@
 # and the Nim SDL2 wrapper: https://github.com/nim-lang/sdl2
 
 import polymorph, polymers, glbits, glbits/modelrenderer, opengl, sdl2, random, math
-from os import sleep
 
 func dot(v1, v2: GLvectorf2): float = v1[0] * v2[0] + v1[1] * v2[1]
 
