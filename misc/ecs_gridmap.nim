@@ -59,6 +59,10 @@ template defineGridMap*(gridRes: static[float], positionType: typedesc, compOpts
   genSystem()
 
 macro addGridmapIterators*(positionType: typedesc): untyped =
+  ## These iterators expect a fully defined ECS and therefore
+  ## must be placed after makeEcs().
+  ## To use the iterators in systems, invoke this template
+  ## before commitSystems().
   let posIdentInst = ident $positionType & "Instance"
   result = quote do:
     iterator itemsAt*[T](gm: GridMap | GridMapInstance): EntityRef =
@@ -88,7 +92,7 @@ macro addGridmapIterators*(positionType: typedesc): untyped =
             for entity in sysGridMap.grid[index]:
               yield entity
 
-    iterator queryGridPrecise*(xPos, yPos, radius: SomeFloat): tuple[entity: EntityRef, position: `posIdentInst`] =
+    iterator queryGridPrecise*(xPos, yPos, radius: SomeFloat): tuple[entity: EntityRef, position: `posIdentInst`, dist: float] =
       ## Queries the grid for entities.
       ## This is accurate to exactly `radius`.
       let sRadius = radius * radius
@@ -100,6 +104,6 @@ macro addGridmapIterators*(positionType: typedesc): untyped =
           diffY = pos.access.y - yPos
           sDist = diffX * diffX + diffY * diffY
         if sDist <= sRadius:
-          yield (entity, pos)
+          yield (entity, pos, sqrt(sDist))
 
 
