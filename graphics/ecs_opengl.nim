@@ -13,8 +13,11 @@ template defineOpenGlRenders*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions, 
         col*: GLvectorf4
 
   macro genOpenGlSystems =
-    let posIdent = ident ($positionType).toLowerAscii
-    
+    # This macro constructs the update system with the passed 'positionType'.
+
+    let
+      posIdent = ident toLowerAscii($positionType)
+
     result = newStmtList(quote do:
       defineSystem("updateModelData", [Model, positionType], sysOpts):
         curModelCount {.pub.}: seq[int]
@@ -70,6 +73,8 @@ template defineOpenGlRenders*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions) 
 
 when isMainModule:
   # Demo of model rendering ECS.
+  # See also demos/particledemo.nim for an expanded version.
+  #
   # This expects SDL2.dll to be in the current directory,
   # available from here: https://www.libsdl.org/download-2.0.php
 
