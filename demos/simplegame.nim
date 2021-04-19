@@ -224,10 +224,9 @@ makeSystemOpts("shrinkAway", [ShrinkAway, Model, KillAfter], sysOpts):
 
 # Seal ECS.
 makeEcs(entOpts)
-addGridmapIterators(Position)
 commitSystems("run")
 
-####################
+#-------------------
 
 proc particles(position: GLvectorf2, angle, spread: float, model: ModelInstance, scale: float, particleCount: int, speed: Slice[float], duration = 1.0) =
   ## Create some particles.

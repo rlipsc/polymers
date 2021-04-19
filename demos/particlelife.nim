@@ -107,7 +107,6 @@ makeSystemOpts("randomisePositions", [Position], sysOpts):
   finish: sys.paused = true
 
 makeEcs(entOpts)
-addGridmapIterators(Position)
 commitSystems("run")
 
 # Create window and OpenGL context.
