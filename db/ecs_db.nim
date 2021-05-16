@@ -33,9 +33,16 @@ template defineDatabaseComponents*(compOpts: ECSCompOptions, sysOpts: ECSSysOpti
   defineSystem("runQuery", [DatabaseConnection, Query], sysOpts)
   defineSystem("connectToDb", [ConnectToDb], sysOpts)
 
-template addDatabaseSystems*: untyped =
+  DatabaseConnection.onRemove:
+    curComponent.connection.close
+  
+  Query.onRemove:
+    if curComponent.query != nil:
+      curComponent.query.freeQuery()
 
-  makeSystem("connectToDb", [ConnectToDb]):
+template addDatabaseSystems*(sysOpts: EcsSysOptions): untyped =
+  ## Perform the database queries.
+  makeSystemOpts("connectToDb", [ConnectToDb], sysOpts):
     all:
       let existingCon = entity.fetchComponent DatabaseConnection
       if existingCon.valid:
@@ -63,9 +70,10 @@ template addDatabaseSystems*: untyped =
         )
       if existingCon.valid: existingCon.update newConnection
       else: entity.addComponent newConnection
-      entity.removeComponent ConnectToDb
+    finish:
+      removeComponents ConnectToDb
 
-  makeSystem("runQuery", [DatabaseConnection, Query]):
+  makeSystemOpts("runQuery", [DatabaseConnection, Query], sysOpts):
     all:
       template db: untyped = item.databaseConnection
       if item.query.query != nil:
@@ -73,14 +81,11 @@ template addDatabaseSystems*: untyped =
           title: item.query.title,
           data: item.query.query.executeFetch)
       else:
-        var query = newQuery(db.connection)
-        try:
-          query.statement = item.query.statement
-          discard entity.addOrUpdate QueryResult(
-            title: item.query.title,
-            data: query.executeFetch)
-        finally:
-          query.freeQuery
+        item.query.query = newQuery(db.connection)
+        item.query.query.statement = item.query.statement
+        discard entity.addOrUpdate QueryResult(
+          title: item.query.title,
+          data: item.query.query.executeFetch)
 
 when isMainModule:
   const
@@ -88,7 +93,7 @@ when isMainModule:
     co = defaultComponentOptions
     so = defaultSystemOptions
   defineDatabaseComponents(co, so)
-  addDatabaseSystems()
+  addDatabaseSystems(so)
 
   makeEcs(eo)
   commitSystems("run")
