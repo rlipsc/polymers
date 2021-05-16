@@ -100,7 +100,7 @@ makeSystemOpts("spin", [Model, Spin], sysOpts):
   all:
     # Continually advance model.angle.
     # Note: `access` changes the spin instance into a value lookup.
-    item.model.angle = item.model.angle + item.spin.access mod TAU
+    item.model.angle = (item.model.angle + item.spin.access) mod TAU
 
 # Check for entities near the mouse.
 
@@ -182,8 +182,8 @@ do:
     sys.paused = true
   all:
     if item.checkRadius.inside:
-      item.entity.addIfMissing Grabbed(force: sys.grabForce, startGrab: cpuTime())
-      item.entity.removeComponent BlendModel
+      entity.addIfMissing Grabbed(force: sys.grabForce, startGrab: cpuTime())
+      entity.removeComponent BlendModel
 
 makeSystemOpts("colourGrabbed", [Grabbed, Model, ColourBlend], sysOpts):
   start:
@@ -213,13 +213,14 @@ makeSystemOpts("releaseGrabbed", [Grabbed, Velocity], sysOpts):
   init:
     sys.paused = true
   all:
-    item.entity.removeComponent Grabbed
     # Replace tag to blend the model.
-    item.entity.addIfMissing BlendModel()
+    entity.addIfMissing BlendModel()
     # Add a bit of randomness.
     const maxJiggle = 0.01
     item.velocity.x += rand -maxJiggle..maxJiggle
     item.velocity.y += rand -maxJiggle..maxJiggle
+    # Removing Grabbed makes the current item undefined.
+    entity.removeComponent Grabbed
   finish:
     # Deactivate system.
     sys.paused = true
@@ -311,9 +312,15 @@ when defined(showFPS):
     t1 = cpuTime()
     fc: int
 
+
+import strutils
+
 proc main =
   echo "Using ", maxEnts, " entities."
+
   # Render loop.
+  type KeyCodes = ptr array[0 .. SDL_NUM_SCANCODES.int, uint8]
+  proc pressed(keyStates: KeyCodes, sc: Scancode): bool = result = keyStates[sc.int] > 0'u8
   while running:
     while pollEvent(evt):
       if evt.kind == QuitEvent:
@@ -351,6 +358,23 @@ proc main =
           screenWidth = windowEvent.data1
           screenHeight = windowEvent.data2
           glViewport(0, 0, screenWidth, screenHeight)
+
+      var keyStates: KeyCodes = getKeyboardState()
+
+      if keyStates.pressed(SDL_SCANCODE_SPACE):
+        # Output simple fragmentation info for all systems.
+        echo "\nSystem fragmentation:\n"
+        forAllSystems:
+          let accessDetails = analyseSystem(sys)
+          echo accessDetails.summary
+
+      if keyStates.pressed(SDL_SCANCODE_F):
+        # Output full fragmentation info for all systems.
+        forAllSystems:
+          let accessDetails = analyseSystem(sys)
+          for c in accessDetails.components:
+            if c.fragmentation > 0.2:
+              echo accessDetails
 
     glClear(GL_COLOR_BUFFER_BIT or GL_DEPTH_BUFFER_BIT)
 
