@@ -87,7 +87,7 @@ defineSystem("lineCursorNav",       [LineCursor, KeyDown], sysOpts)
 
 makeEcs(entOpts)
 
-################
+#---------------
 
 template newEntry(textStr: string, coord: tuple[x, y: float]): tuple[ent: EntityRef, rs: RenderStringInstance] =
   let
@@ -218,8 +218,6 @@ makeSystem("updateDisplay", [QueryResult, DisplayData]):
 
       displayData.updated = true
       entity.removeComponent QueryResult
-
-addConsoleEventSystems()
 
 # Turn a RenderString into an edit box.
 makeSystem("inputString", [EditString, KeyDown, RenderString]):

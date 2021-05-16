@@ -86,7 +86,7 @@ defineSystem("lineCursorNav",       [LineCursor, KeyDown], sysOpts)
 
 makeEcs(entOpts)
 
-################
+#---------------
 
 template newEntry(textStr: string, coord: tuple[x, y: float]): tuple[ent: EntityRef, rs: RenderStringInstance] =
   # Create an entity with the given text as RenderString.
@@ -211,8 +211,6 @@ makeSystem("updateDisplay", [QueryResult, DisplayData]):
 
       displayData.updated = true
 
-addConsoleEventSystems()
-
 makeSystem("inputString", [EditString, KeyDown, RenderString]):
   # Turn a RenderString into an edit box.
   start:
@@ -231,7 +229,7 @@ makeSystem("inputString", [EditString, KeyDown, RenderString]):
         else:
           item.renderString.text &= aChar
         xPos = min(xPos + 1, curLen - 1)
-        entity.consume item.keyDown, i
+        entity.consumeKey item.keyDown, i
       else:
         case item.keyDown.codes[i]
         of 14:
@@ -239,43 +237,25 @@ makeSystem("inputString", [EditString, KeyDown, RenderString]):
           if xPos >= 0 and curLen > 0:
             item.renderString.text.delete(xPos, xPos)
             xPos = max(xPos - 1, 0)
-          entity.consume item.keyDown, i
+          entity.consumeKey item.keyDown, i
         of 75:
           # Left
           xPos = max(xPos - 1, 0)
-          entity.consume item.keyDown, i
+          entity.consumeKey item.keyDown, i
         of 77:
           # Right
           xPos = min(curLen - 1, xPos + 1)
-          entity.consume item.keyDown, i
+          entity.consumeKey item.keyDown, i
         of 28:
           # Return
           entity.addOrUpdate InputFinished()
-          entity.consume item.keyDown, i
+          entity.consumeKey item.keyDown, i
         else:
           discard
 
 # Update any created/altered RenderChar/RenderStrings
 addRenderCharSystems()
-addDatabaseSystems()
-
-proc consume(entity: EntityRef, keyComp: KeyDownInstance | KeyUpInstance, i: int) =
-  ## Remove a key, if no keys remove the component.
-  keyComp.codes.del i
-  keyComp.chars.del i
-  keyComp.access.keys.del i
-  if keyComp.codes.len == 0:
-    entity.removeComponent keyComp.access.type
-
-template processKeys(keyComponent: KeyDownInstance | KeyUpInstance, actions: untyped): untyped =
-  ## Iterate keys allowing for length changes by consume.
-  var i = keyComponent.codes.high
-  while i >= 0:
-    let
-      code {.inject.} = keyComponent.codes[i]
-      keyIndex {.inject.} = i
-    actions
-    i.dec
+addDatabaseSystems(sysOpts)
 
 makeSystem("escape", [EditString, KeyDown]):
   all:
@@ -283,7 +263,7 @@ makeSystem("escape", [EditString, KeyDown]):
     item.keyDown.processKeys:
       if code == 1:
         sys.escapePressed = true
-        entity.consume item.keyDown, keyIndex
+        entity.consumeKey item.keyDown, keyIndex
         break
 
 makeSystem("controlTables", [Tables, DisplayData, KeyDown, LineCursor]):
@@ -300,7 +280,7 @@ makeSystem("controlTables", [Tables, DisplayData, KeyDown, LineCursor]):
           tableName = item.displayData.rows[lineNo][0].rs.text
 
         item.displayData.updated = false
-        entity.consume(item.keyDown, keyIndex)
+        entity.consumeKey(item.keyDown, keyIndex)
         entity.removeComponent Tables
         entity.addComponent FetchTableData(table: tableName)
       of 33:
@@ -310,7 +290,7 @@ makeSystem("controlTables", [Tables, DisplayData, KeyDown, LineCursor]):
           tableName = item.displayData.rows[lineNo][0].rs.text
 
         item.displayData.updated = false
-        entity.consume(item.keyDown, keyIndex)
+        entity.consumeKey(item.keyDown, keyIndex)
         entity.removeComponent Tables
         entity.addComponent FetchTableFields(table: tableName)
       else: discard
@@ -324,7 +304,7 @@ makeSystem("controlTableData", [TableData, DisplayData, KeyDown, LineCursor]):
         item.displayData.updated = false
         item.lineCursor.line = 0
         item.lineCursor.lastLine = -1
-        entity.consume item.keyDown, keyIndex
+        entity.consumeKey item.keyDown, keyIndex
         entity.removeComponent TableData
         entity.addComponent FetchTables()
       else: discard
@@ -338,7 +318,7 @@ makeSystem("controlTableFields", [TableFields, DisplayData, KeyDown, LineCursor]
         item.displayData.updated = false
         item.lineCursor.line = 0
         item.lineCursor.lastLine = -1
-        entity.consume item.keyDown, keyIndex
+        entity.consumeKey item.keyDown, keyIndex
         entity.removeComponent TableFields
         entity.addComponent FetchTables()
       else: discard
@@ -350,10 +330,10 @@ makeSystem("lineCursorNav", [LineCursor, KeyDown]):
       case item.keyDown.codes[i]
       of 72:
         lc.line -= 1
-        entity.consume(item.keyDown, i)
+        entity.consumeKey(item.keyDown, i)
       of 80:
         lc.line += 1
-        entity.consume(item.keyDown, i)
+        entity.consumeKey(item.keyDown, i)
       else: discard
 
 makeSystem("dispLineCursor", [LineCursor, DisplayData]):
@@ -408,10 +388,10 @@ proc main() =
     dbName = ask("Enter database: ", "master", y = -1.0 + sysRenderChar.charHeight)
 
   if hostName.strip == "":
-    quit "Please provide a host to connect to"
+    quit "\nPlease provide a host to connect to"
   
   if dbName.strip == "":
-    quit "Please provide a database to connect to"
+    quit "\nPlease provide a database to connect to"
   
   let dbBrowser =
     newEntityWith(
