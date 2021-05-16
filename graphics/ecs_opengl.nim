@@ -1,8 +1,8 @@
 import polymorph
+from strutils import toLowerAscii
 
-template defineOpenGlRenders*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions, positionType: typedesc) {.dirty.} =
+template defineOpenGlComponents*(compOpts: ECSCompOptions, positionType: typedesc) {.dirty.} =
   import opengl, glbits, glbits/modelrenderer
-  from strutils import toLowerAscii
 
   registerComponents(compOpts):
     type
@@ -12,63 +12,65 @@ template defineOpenGlRenders*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions, 
         angle*: GLfloat
         col*: GLvectorf4
 
-  macro genOpenGlSystems =
-    # This macro constructs the update system with the passed 'positionType'.
+  defineSystem("updateModelData", [Model, positionType], sysOpts):
+    curModelCount {.pub.}: seq[int]
 
-    let
-      posIdent = ident toLowerAscii($positionType)
+macro addOpenGLUpdateSystem*(sysOpts: ECSSysOptions, positionType: typedesc): untyped =
+  ## Add the system to send model and position data to the GPU.
+  
+  let posIdent = ident toLowerAscii($positionType)
 
-    result = newStmtList(quote do:
-      defineSystem("updateModelData", [Model, positionType], sysOpts):
-        curModelCount {.pub.}: seq[int]
+  result = newStmtList(quote do:
+    makeSystemBody("updateModelData"):
+      # This system populates the instance buffers and keeps track of
+      # how many instances need to be rendered per model.
+      start:
+        # Reset model counters.
+        sys.curModelCount.setLen modelCount()
+        for i in 0 ..< sys.curModelCount.len:
+          sys.curModelCount[i] = 0
+      all:
+        # Populate instance buffers.
+        let
+          mId = item.model.modelId
+          curPos = sys.curModelCount[mId.int]
+        mId.positionVBOArray[curPos] = vec3(item.`posIdent`.x, item.`posIdent`.y, item.`posIdent`.z)
+        mId.scaleVBOArray[curPos] = item.model.scale
+        mId.rotationVBOArray[curPos] = [item.model.access.angle]
+        mId.colVBOArray[curPos] = item.model.col
 
-      makeSystemBody("updateModelData"):
-        # This system populates the instance buffers and keeps track of
-        # how many instances need to be rendered per model.
-        start:
-          # Reset model counters.
-          sys.curModelCount.setLen modelCount()
-          for i in 0 ..< sys.curModelCount.len:
-            sys.curModelCount[i] = 0
-        all:
-          # Populate instance buffers.
-          let
-            mId = item.model.modelId
-            curPos = sys.curModelCount[mId.int]
-          mId.positionVBOArray[curPos] = vec3(item.`posIdent`.x, item.`posIdent`.y, item.`posIdent`.z)
-          mId.scaleVBOArray[curPos] = item.model.scale
-          mId.rotationVBOArray[curPos] = [item.model.access.angle]
-          mId.colVBOArray[curPos] = item.model.col
+        sys.curModelCount[mId.int].inc
 
-          sys.curModelCount[mId.int].inc
-    )
+    iterator activeModels*: tuple[model: ModelId, count: int] =
+      ## Render only models that have been processed by `updateModelData`.
+      for modelIndex in 0 ..< modelCount():
+        if modelIndex < sysUpdateModelData.curModelCount.len:
+          let count = sysUpdateModelData.curModelCount[modelIndex]
+          if count > 0:
+            yield (modelByIndex(modelIndex), count)
 
-  genOpenGlSystems()
+    proc renderActiveModels* =
+      ## Render only models that have been processed by `updateModelData`.
+      for modelInfo in activeModels():
+        renderModel(modelInfo.model, modelInfo.count)
 
-  iterator activeModels*: tuple[model: ModelId, count: int] =
-    ## Render only models that have been processed by `updateModelData`.
-    for modelIndex in 0 ..< modelCount():
-      if modelIndex < sysUpdateModelData.curModelCount.len:
-        let count = sysUpdateModelData.curModelCount[modelIndex]
-        if count > 0:
-          yield (modelByIndex(modelIndex), count)
+    template renderActiveModelsSetup*(setup: untyped) =
+      ## Render only models that have been processed by `updateModelData`.
+      for modelInfo in activeModels():
+        renderModelSetup(modelInfo.model, modelInfo.count, setup)
+  )
 
-  proc renderActiveModels* =
-    ## Render only models that have been processed by `updateModelData`.
-    for modelInfo in activeModels():
-      renderModel(modelInfo.model, modelInfo.count)
-
-  template renderActiveModelsSetup*(setup: untyped) =
-    ## Render only models that have been processed by `updateModelData`.
-    for modelInfo in activeModels():
-      renderModelSetup(modelInfo.model, modelInfo.count, setup)
+template defineOpenGlRenders*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions, positionType: typedesc) {.dirty.} =
+  defineOpenGLComponents(compOpts, positionType)
+  addOpenGLUpdateSystem(sysOpts, positionType)
 
 template defineOpenGlRenders*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions) {.dirty.} =
   registerComponents(compOpts):
     type
       Position* = object
         x*, y*, z*: float
-  defineOpenGlRenders(compOpts, sysOpts, Position)
+  defineOpenGLComponents(compOpts, Position)
+  addOpenGLUpdateSystem(sysOpts, Position)
 
 
 when isMainModule:
