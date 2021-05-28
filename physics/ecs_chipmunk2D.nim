@@ -1,12 +1,11 @@
-#[
-  Polymorph ECS component for the Chipmunk physics engine.
-    Chipmunk Physics:
-      https://chipmunk-physics.net/
-      https://github.com/slembcke/Chipmunk2D
-      Documentation:
-      https://chipmunk-physics.net/release/ChipmunkLatest-Docs/
-    Nim wrapper: https://github.com/oprypin/nim-chipmunk  
-]#
+
+## Polymorph ECS component for the Chipmunk physics engine.
+##   Chipmunk Physics:
+##     https://chipmunk-physics.net/
+##     https://github.com/slembcke/Chipmunk2D
+##     Documentation:
+##     https://chipmunk-physics.net/release/ChipmunkLatest-Docs/
+##   Nim wrapper: https://github.com/oprypin/nim-chipmunk  
 
 import polymorph
 
@@ -234,16 +233,21 @@ template defineECSChipmunk2D*(compOpts: ECSCompOptions) {.dirty.} =
 
   proc makePhysicsBody*(bt: BodyTemplate, position = v(0, 0), velocity = v(0, 0)): PhysicsBody =
     ## Initialise a Chipmunk Body object from BodyTemplate and return it in a PhysicsBody.
-    let body = newBody(bt.bodyType, bt.mass, bt.radius, bt.moment)
+    assert bt.mass != 0.0, "Mass must be non-zero"
+    let moment =
+      if bt.moment == 0.0: momentForCircle(bt.mass, 0.0, bt.radius, v(0.0, 0.0))
+      else: bt.moment
+    let body = physicsSpace.addBody(newBody(bt.bodyType, bt.mass, bt.radius, moment))
     body.position = position
     body.velocity = velocity
     body.angle = bt.angle
-    PhysicsBody(body: physicsSpace.addBody body)
+    PhysicsBody(body: body)
 
   proc makePhysicsShape*(st: ShapeTemplate, entity: EntityRef, body: Body): PhysicsShape =
     ## Initialise a Chipmunk Shape object from ShapeTemplate and return it in a PhysicsShape.
     ## 
     ## Requires an initialised Body object to attach the shape to.
+    assert body.mass != 0.0, "Mass must be non-zero"
     let shape =
       case st.kind
       of skCircle, skSquare:
