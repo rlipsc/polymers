@@ -6,6 +6,7 @@ template defineGridMap*(gridRes: static[float], positionType: typedesc, compOpts
   ## a single grid square.
   ## `positionType` can be any type that includes `x` and `y` fields of `SomeFloat`.
   from strutils import toLowerAscii
+  from math import sqrt
 
   registerComponents(compOpts):
     type
