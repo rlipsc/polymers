@@ -71,7 +71,7 @@ template addDatabaseSystems*(sysOpts: EcsSysOptions): untyped =
       if existingCon.valid: existingCon.update newConnection
       else: entity.addComponent newConnection
     finish:
-      removeComponents ConnectToDb
+      sys.remove ConnectToDb
 
   makeSystemOpts("runQuery", [DatabaseConnection, Query], sysOpts):
     all:
