@@ -7,10 +7,11 @@
   only the first entity to render to a clear cell will be shown.
 ]#
 
-import polymorph, terminal
-export terminal
+import polymorph
 
 template defineRenderChar*(componentOptions: static[ECSCompOptions], systemOptions: static[ECSSysOptions]): untyped {.dirty.} =
+  import terminal
+  export terminal
   from winlean import Handle
   
   ## Add types and define systems for rendering x,y positions of characters to the terminal.
@@ -118,7 +119,7 @@ template defineRenderChar*(componentOptions: static[ECSCompOptions], systemOptio
                                 bottom: sys.height.uint16)
 
   # Utility functions
-  ###################
+  #------------------
 
   proc setDimensions*(sys: var RenderCharSystem, width, height: Natural) =
     sys.width = width
@@ -241,7 +242,7 @@ template defineRenderChar*(componentOptions: static[ECSCompOptions], systemOptio
     else: '#'
 
   # Initialising/de-initialising
-  ##############################
+  #-----------------------------
 
   RenderChar.onRemove:
     # Mark this display char as clear when a RenderChar is removed from an entity
@@ -253,7 +254,7 @@ template defineRenderChar*(componentOptions: static[ECSCompOptions], systemOptio
       let charComp = characterEnt.fetchComponent RenderChar
       assert charComp.valid
       # Triggers RenderChar's onRemove.
-      characterEnt.delete                       # TODO: Should see delete!?
+      characterEnt.delete
 
 template addRenderCharUpdate*(): untyped =
   ## Insert systems for updating the state of `RenderChar` and
@@ -472,7 +473,7 @@ template addRenderCharOutput*(): untyped =
       for i in 0 ..< sys.states.len:
         template curState: untyped = sys.states[i]
         template curOutputCell: untyped = sys.consoleOut[i]
-        if curState.state == csCharacter and curState.render.valid:
+        if curState.state == csCharacter and curState.render.valid and curState.render.alive:
           # Update console out block.
           curOutputCell.character = curState.character.ord.uint16
           let
