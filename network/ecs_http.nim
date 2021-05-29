@@ -444,6 +444,5 @@ template defineHttp*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions): untyped 
             code: Http404
           )
       else:
-        networkLog ["", entityIdStr(item.entity), "Route accepted", item.httpRequest.url]
-
+        networkLog ["  >-", entityIdStr(item.entity), "Route accepted", item.httpRequest.url]
 
