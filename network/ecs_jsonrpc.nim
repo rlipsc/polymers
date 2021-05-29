@@ -219,7 +219,7 @@ when isMainModule:
   let server =
     newEntityWith(
       TcpListen(
-        port: 8545.Port,
+        port: 8080.Port,
         onAccept: cl(
           JsonRpcServer(),
           ProcessHttp(
