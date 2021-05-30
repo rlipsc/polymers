@@ -5,8 +5,7 @@ template defineJsonRpc*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions, loggin
   ## JSON RPC format:
   ##   {"jsonrpc": "2.0", "method": "subtract", "params": [42, 23], "id": 1}
   ##
-  import json, strutils
-  import times  
+  import json, strutils, times
 
   static:
     if not (declared(TcpRecv) and declared(HttpRequest)):
@@ -82,20 +81,22 @@ template defineJsonRpc*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions, loggin
           item.httpRequest.body & "' " &
           "Error: " & e.msg)
 
-      var jsIssues: seq[JsonState]
+      var
+        jsIssues: set[JsonState]
 
       if parsed:
         let versionNode = %"2.0"
 
-        if node.kind != JObject: jsIssues.add jsNotObject
-        if not node.hasKey($rpcMethod): jsIssues.add jsNoMethod
-        if not node.hasKey($rpcJsonRpc): jsIssues.add jsNoJsonRpc
-        if not node.hasKey($rpcId): jsIssues.add jsNoId
-    
-        let version = node[$rpcJsonRpc]
-        if version == nil or version.kind != JString or
-            version != versionNode:
-          jsIssues.add jsWrongVersion
+        if node.kind != JObject: jsIssues.incl jsNotObject
+        if not node.hasKey($rpcMethod): jsIssues.incl jsNoMethod
+        if not node.hasKey($rpcJsonRpc): jsIssues.incl jsNoJsonRpc
+        if not node.hasKey($rpcId): jsIssues.incl jsNoId
+
+        if jsNoJsonRpc notin jsIssues:
+          let version = node[$rpcJsonRpc]
+          if version == nil or version.kind != JString or
+              version != versionNode:
+            jsIssues.incl jsWrongVersion
 
         if jsIssues.len == 0:
           # Valid json rpc object.
@@ -108,14 +109,18 @@ template defineJsonRpc*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions, loggin
 
           let rpcTask = item.entity.add(
             JsonRpc(
-              id: id.str,
+              id: $id,
               name: methodStr.toLowerAscii,
               params: params
             )
           )
         else:
           when logging:
-            let reasons = jsIssues.join ", "
+            var reasons: string
+            for item in jsIssues:
+              if reasons.len > 0: reasons &= ", " & $item
+              else: reasons &= $item
+
             appendLog(item.entity, "Invalid JSON RPC format: " &
               reasons)
           
@@ -126,10 +131,6 @@ template defineJsonRpc*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions, loggin
         echo "Failed to parse: ", item.httpRequest.body
     finish:
       sys.remove HttpRequest
-  
-  # makeSystemOpts("clearRequest", [HttpRequest], sysOpts):
-  #   finish:
-  #     sys.remove HttpRequest
 
   makeSystemOpts("processJsonRpcResponse", [JsonRpcServer, JsonRpcResponse], sysOpts):
     all:
@@ -167,17 +168,17 @@ template defineJsonRpc*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions, loggin
                   }
                 }
               )
-          ))
-        entity.addOrUpdate JsonRpcTransit()
+          ),
+          JsonRpcTransit(),
+          )
     finish:
       sys.remove JsonRpcResponse
 
-  makeSystemOpts("cleanUpJsonRpc", [JsonRpcTransit, HttpResponseSent], sysOpts):
-    all:
-      echo "Response sent"
-      entity.remove HttpResponseSent
-      entity.remove JsonRpcTransit
-      entity.add JsonRpcResponseSent()
+  makeSystemOpts("completeJsonRpcSend", [JsonRpcTransit, HttpResponseSent], sysOpts):
+    addedCallback:
+      let entity = item.entity
+      entity.remove JsonRpcTransit, HttpResponseSent
+      sys.deleteList.add entity
 
 template defineJsonRpc*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions) {.dirty.} =
   defineJsonRpc(compOpts, sysOpts, true)
@@ -198,7 +199,7 @@ when isMainModule:
   # the entity when the response is sent.
 
   makeSystemOpts("dispatchRpcs", [JsonRpc], sysOpts):
-    all:
+    addedCallback:
       case item.jsonRpc.name
       of "hello":
         item.entity.add JsonRpcResponse(
