@@ -381,7 +381,7 @@ template defineHttp*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions): untyped 
         # Transfer management of heap buffer in `buf` to tcpSend.
         buf.transfer tcpSend.data
 
-        item.tcpConnection.send(tcpSend)
+        item.tcpConnection.send(tcpSend, [ERROR_IO_PENDING, WSAECONNRESET])
       else:
         discard item.entity.add TCPSend(data: buf)
   
