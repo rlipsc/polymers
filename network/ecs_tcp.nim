@@ -594,7 +594,7 @@ template defineTcpNetworking*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions, 
   proc beginAccept(olAccept: ptr OverlappedRead, clearMem: static[bool]): bool =
     doBeginAccept(olAccept, clearMem, false)
 
-  proc beginRecv(olRecvPtr: ptr OverlappedRead, bufferSize = defaultReadBufferSize): cint =
+  proc beginRecv(olRecvPtr: ptr OverlappedRead, bufferSize = defaultReadBufferSize, okValues: openarray[SomeInteger] = [ERROR_IO_PENDING]): cint =
     ## After accept has completed, this starts the data receiving process.
     ## Returns the result of WSARecv.
     assert olRecvPtr.info.state != csRead,
@@ -626,7 +626,7 @@ template defineTcpNetworking*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions, 
         olRecvPtr,
         nil
       )
-    discard reportError("Read", [ERROR_IO_PENDING])
+    discard reportError("Read", okValues)
     res
 
   proc createListenSocket(localPort: Port, ioPort: CompletionPortHandle): SocketHandle =
@@ -767,7 +767,7 @@ template defineTcpNetworking*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions, 
       info.socket.close()
       info.socket = 0.SocketHandle
 
-  proc send*(connection: var TcpConnection, tcpSend: var TcpSend) =
+  proc send*(connection: var TcpConnection, tcpSend: var TcpSend, okValues: openarray[SomeInteger]) =
     ## Initiate a send operation for `TcpSend`.
     ## 
     ## If `TcpConnection` is not initialised, a connect is attempted
@@ -827,10 +827,16 @@ template defineTcpNetworking*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions, 
           tcpSend.overlappedSend.addr,
           nil)
 
-      discard reportError("Send", [ERROR_IO_PENDING])
+      discard reportError("Send", okValues)
+
+  template send*(connection: TcpConnectionInstance, tcpSend: TcpSend) =
+    send(connection.access, tcpSend.access, [ERROR_IO_PENDING])
+
+  template send*(connection: TcpConnectionInstance, tcpSend: TcpSendInstance, okValues: openarray[SomeInteger]) =
+    send(connection.access, tcpSend.access, okValues)
 
   template send*(connection: TcpConnectionInstance, tcpSend: TcpSendInstance) =
-    send(connection.access, tcpSend.access)
+    send(connection.access, tcpSend.access, [ERROR_IO_PENDING])
 
   proc initIoPort*(sys: var TcpEventsSystem) =
     ## Create an IO port for the system on first run.
@@ -1139,7 +1145,7 @@ template defineTcpNetworking*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions, 
             entity.addIfMissing TcpConnected()
 
             let tcpSend = info.compRef.index.TcpSendInstance
-            send(connection.access, tcpSend.access)
+            send(connection, tcpSend)
 
           of csSendInProgress:
             # A transport has completed a send operation.
@@ -1170,11 +1176,11 @@ template defineTcpNetworking*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions, 
         if processedCompletions > 0:
           networkLog defaultWidth, @["Events processed", $processedCompletions]
 
-  proc read*(connection: var TcpConnection, tcpRecv: var TcpRecv) =
-    discard beginRecv(tcpRecv.overlappedRead.addr, tcpRecv.bufferSize)
+  proc read*[T: TcpRecv or TcpRecvInstance](connection: var TcpConnection, tcpRecv: var T, okValues: openarray[SomeInteger]) =
+    discard beginRecv(tcpRecv.overlappedRead.addr, tcpRecv.bufferSize, okValues)
 
-  template read*(connection: TcpConnectionInstance, recv: TcpRecvInstance) =
-    connection.access.read(recv.access)
+  template read*[T: TcpRecv or TcpRecvInstance](connection: TcpConnectionInstance, recv: T) =
+    connection.access.read(recv.access, [ERROR_IO_PENDING])
 
   makeSystem("tcpListen", [TcpListen]):
     addedCallback:
@@ -1228,7 +1234,7 @@ template defineTcpNetworking*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions, 
       
       # Initiate the send operation.
 
-      send(item.tcpConnection.access, item.tcpSend.access)
+      send(item.tcpConnection, item.tcpSend)
 
 template defineTcpNetworking*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions): untyped {.dirty.} =
   defineTcpNetworking(compOpts, sysOpts, tllNone)
