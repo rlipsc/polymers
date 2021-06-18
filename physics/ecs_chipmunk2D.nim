@@ -267,20 +267,20 @@ template defineECSChipmunk2D*(compOpts: ECSCompOptions) {.dirty.} =
 
   # Include constructor registration as soon as makeEcs() has completed.
   onEcsBuilt:
-    registerConstructor BodyTemplate, proc(entity: EntityRef, component: Component, master: EntityRef): seq[Component] =
+    registerConstructor BodyTemplate, proc(entity: EntityRef, component: Component, context: EntityRef): seq[Component] =
       # Replaces BodyTemplate with PhysicsBody during construction.
       let bt = BodyTemplateRef(component).value
       result.add bt.makePhysicsBody.makeContainer
 
-    registerConstructor ShapeTemplate, proc(entity: EntityRef, component: Component, master: EntityRef): seq[Component] =
+    registerConstructor ShapeTemplate, proc(entity: EntityRef, component: Component, context: EntityRef): seq[Component] =
       # Replaces ShapeTemplate with PhysicsShape during construction.
       let
         st = ShapeTemplateRef(component).value
-        masterBody = master.fetch PhysicsBody
+        contextBody = context.fetch PhysicsBody
 
-      assert masterBody.valid, "Constructor for ShapeTemplate expects " &
-        "master/first entity to have a PhysicsBody"
+      assert contextBody.valid, "Constructor for ShapeTemplate expects " &
+        "context/first entity to have a PhysicsBody"
 
-      let body = masterBody.body
+      let body = contextBody.body
 
       result.add st.makePhysicsShape(entity, body)
