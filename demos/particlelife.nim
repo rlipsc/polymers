@@ -146,10 +146,10 @@ makeSystemOpts("rotateTowards", [Position, Velocity, Rotate, Cluster, GridMap, M
         vec4(0.0, 0.0, 1.0, 1.0), vec4(1.0, 0.0, 0.0, 1.0),
         min(1.0, count.float / 40.0))
 
-makeSystemOptFields("setTurnAmount", [Cluster], sysOpts) do:
-  turnAmount: float
-do:
+makeSystemOpts("setTurnAmount", [Cluster], sysOpts):
   # Changes Cluster then deactivates.
+  fields:
+    turnAmount: float
   init: sys.paused = true
   all: item.cluster.turnAmount = sys.turnAmount + rand -turnVariance .. turnVariance
   finish: sys.paused = true

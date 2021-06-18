@@ -16,9 +16,9 @@ registerComponents(compOpts):
     RootPage* = object
     TimePage* = object
 
-makeSystemOptFields("serveRoot", [RootPage], sysOpts):
-  helloCount: int
-do:
+makeSystemOpts("serveRoot", [RootPage], sysOpts):
+  fields:
+    helloCount: int
   added:
     item.entity.add HttpResponse(
       code: Http200,

@@ -59,10 +59,10 @@ makeSystemOpts("movement", [Position, Velocity], sysOpts):
     item.velocity.x *= 0.99
     item.velocity.y *= 0.99
 
-makeSystemOptFields("seekPlayer", [Seek, Enemy, Position, Velocity, Model], sysOpts) do:
-  player: EntityRef
-do:
+makeSystemOpts("seekPlayer", [Seek, Enemy, Position, Velocity, Model], sysOpts):
   # Move towards player.
+  fields:
+    player: EntityRef
   start:
     # Don't seek the player when they're dead.
     if sys.player.hasComponent PlayerKilled: sys.paused = true 
@@ -185,9 +185,9 @@ makeSystemOpts("killEnemies", [Enemy], sysOpts):
 # Delete entities with the `Killed` component.
 addKillingSystem()
 
-makeSystemOptFields("fireBullet", [FireBullet, Position, Model], sysOpts) do:
-  player: EntityRef
-do:
+makeSystemOpts("fireBullet", [FireBullet, Position, Model], sysOpts):
+  fields:
+    player: EntityRef
   start:
     sys.paused = sys.player.hasComponent PlayerKilled
     let curTime = cpuTime()

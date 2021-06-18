@@ -141,14 +141,14 @@ when isMainModule:
       item.velocity.x = reactSpeed * cos(reactAngle)
       item.velocity.y = reactSpeed * sin(reactAngle)
 
-  makeSystemOptFields("attractMouse", [Position, Velocity, AttractToMouse], sysOpts) do:
-    mousePos: GLvectorf2
-  do:
+  makeSystemOpts("attractMouse", [Position, Velocity, AttractToMouse], sysOpts):
+    fields:
+      mousePos: GLvectorf2
     all: reactToPoint(0.0, item.attractToMouse.dist, item.attractToMouse.speed)
 
-  makeSystemOptFields("avoidMouse", [Position, Velocity, AvoidMouse], sysOpts) do:
-    mousePos: GLvectorf2
-  do:
+  makeSystemOpts("avoidMouse", [Position, Velocity, AvoidMouse], sysOpts):
+    fields:
+      mousePos: GLvectorf2
     all: reactToPoint(PI, item.avoidMouse.dist, item.avoidMouse.speed)
 
   makeEcs(entOpts)

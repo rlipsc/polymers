@@ -38,10 +38,10 @@ template defineGridMap*(gridRes: static[float], positionType: typedesc, compOpts
 
     # The position type and instance is injected into the gridMap systems.
     quote do:
-      makeSystemOptFields("gridMap", [GridMap, positionType], sysOpts):
-        # The grid has an extra row at the higher extent to handle y coordinates of 1.0.
-        grid: array[0 .. gridResolution * gridResolution + gridResolution, seq[EntityRef]]
-      do:
+      makeSystemOpts("gridMap", [GridMap, positionType], sysOpts):
+        fields:
+          # The grid has an extra row at the higher extent to handle y coordinates of 1.0.
+          grid: array[0 .. gridResolution * gridResolution + gridResolution, seq[EntityRef]]
         all:
           # Stores entities with `GridMap` at a grid slot according to `Position`. 
           let

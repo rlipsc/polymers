@@ -159,12 +159,12 @@ template defineJsonRpc*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions, loggin
                 "jsonrpc": "2.0",
                 "id": item.jsonRpcServer.id,
                 "error": {
-                    "code": item.jsonRpcResponse.code,
-                    "message": item.jsonRpcResponse.message,
-                    "data":
-                      if item.jsonRpcResponse.data != nil:
-                        item.jsonRpcResponse.data                          
-                      else: newJNull()
+                  "code": item.jsonRpcResponse.code,
+                  "message": item.jsonRpcResponse.message,
+                  "data":
+                    if item.jsonRpcResponse.data != nil:
+                      item.jsonRpcResponse.data                          
+                    else: newJNull()
                   }
                 }
               )

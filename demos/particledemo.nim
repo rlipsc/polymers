@@ -104,10 +104,10 @@ makeSystemOpts("spin", [Model, Spin], sysOpts):
 
 # Check for entities near the mouse.
 
-makeSystemOptFields("checkRadius", [Position, CheckRadius], sysOpts) do:
-  # Add a field for the mouse position to the system type definition.
-  sourcePos: GLvectorf2
-do:
+makeSystemOpts("checkRadius", [Position, CheckRadius], sysOpts):
+  fields:
+    # Add a field for the mouse position to the system type definition.
+    sourcePos: GLvectorf2
   all:
     # Calculates vector to sourcePos when within checkRadius.radius.
     let
@@ -174,10 +174,10 @@ makeSystemOpts("updateModelWithBlend", [BlendModel, ColourBlend, Model], sysOpts
 
 # Grabbing entities with the mouse button.
 
-makeSystemOptFields("grab", [Grabbable, CheckRadius], sysOpts) do:
-  grabForce: float
-do:
+makeSystemOpts("grab", [Grabbable, CheckRadius], sysOpts):
   # This system is paused by default and is manually controlled.
+  fields:
+    grabForce: float
   init:
     sys.paused = true
   all:
@@ -192,11 +192,11 @@ makeSystemOpts("colourGrabbed", [Grabbed, Model, ColourBlend], sysOpts):
   all:
     item.model.col = mix(item.colourBlend.original, item.colourBlend.blendTo, timeWiggle)
 
-makeSystemOptFields("gatherGrabbed", [Grabbed, CheckRadius, Position, Velocity], sysOpts) do:
-  sourcePos: GLvectorf2
-do:
+makeSystemOpts("gatherGrabbed", [Grabbed, CheckRadius, Position, Velocity], sysOpts):
+  # Moves grabbed entities towards sourcePos.
+  fields:
+    sourcePos: GLvectorf2
   all:
-    # Moves grabbed entities towards sourcePos.
     let
       force = item.grabbed.force
       dx = sys.sourcePos[0] - item.position.x
