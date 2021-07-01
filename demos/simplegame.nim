@@ -19,7 +19,7 @@ const
   dt = 1.0 / 60.0
 
 defineOpenGlRenders(compOpts, sysOpts)
-defineKilling(compOpts, sysOpts)
+defineKilling(compOpts)
 defineGridMap(0.08, Position, compOpts, sysOpts)
 
 registerComponents(compOpts):
@@ -183,7 +183,7 @@ makeSystemOpts("killEnemies", [Enemy], sysOpts):
     sys.paused = true
 
 # Delete entities with the `Killed` component.
-addKillingSystem()
+addKillingSystems(sysOpts)
 
 makeSystemOpts("fireBullet", [FireBullet, Position, Model], sysOpts):
   fields:

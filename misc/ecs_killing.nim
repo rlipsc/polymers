@@ -6,7 +6,7 @@
 
 import polymorph
 
-template defineKilling*(componentOptions: static[ECSCompOptions], systemOptions: static[ECSSysOptions]): untyped {.dirty.} =
+template defineKilling*(componentOptions: static[ECSCompOptions]): untyped {.dirty.} =
 
   registerComponents(componentOptions):
     type
@@ -20,6 +20,10 @@ template defineKilling*(componentOptions: static[ECSCompOptions], systemOptions:
   KillAfter.onInit:
     curComponent.startTime = cpuTime()
 
+template addKillingSystems*(systemOptions: static[ECSSysOptions]): untyped =
+  # To effectively use a killed tag, it is desirable to be able to decide
+  # where they are ultimately removed so that you can process Killed in your
+  # own systems first.
   defineSystem("killAfter", [KillAfter], systemOptions)
   defineSystem("deleteKilled", [Killed], systemOptions)
 
@@ -33,10 +37,6 @@ template defineKilling*(componentOptions: static[ECSCompOptions], systemOptions:
       if curTime - item.killAfter.startTime >= item.killAfter.duration:
         item.entity.addComponent Killed()
 
-template addKillingSystem*(): untyped =
-  # To effectively use a killed tag, it is desirable to be able to decide
-  # where they are ultimately removed so that you can process Killed in your
-  # own systems first.
   makeSystemBody("deleteKilled"):
     all:
       # Entities tagged with Killed are now removed.
