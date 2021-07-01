@@ -4,6 +4,19 @@ from strutils import toLowerAscii
 template defineOpenGlComponents*(compOpts: ECSCompOptions, positionType: typedesc) {.dirty.} =
   import opengl, glbits, glbits/modelrenderer
 
+  type
+    TextureId* = distinct int
+
+  const rectangle: array[6, TextureVertex] = [
+    [-1.0.GLFloat, 1.0, 0.0,    0.0, 1.0],
+    [1.0.GLFloat, 1.0, 0.0,     1.0, 1.0],
+    [-1.0.GLFloat, -1.0, 0.0,   0.0, 0.0],
+    #
+    [1.0.GLFloat, -1.0, 0.0,    1.0, 0.0],
+    [-1.0.GLFloat, -1.0, 0.0,   0.0, 0.0],
+    [1.0.GLFloat, 1.0, 0.0,     1.0, 1.0]
+  ]
+
   registerComponents(compOpts):
     type
       Model* = object
@@ -11,9 +24,29 @@ template defineOpenGlComponents*(compOpts: ECSCompOptions, positionType: typedes
         scale*: GLvectorf3
         angle*: GLfloat
         col*: GLvectorf4
+      
+      Texture* = object
+        textureId*: TextureId
+        scale*: GLvectorf2
+        angle*: GLfloat
+        col*: GLvectorf4
 
   defineSystem("updateModelData", [Model, positionType], sysOpts):
     curModelCount {.pub.}: seq[int]
+
+  defineSystem("updateTextureData", [Texture, positionType], sysOpts):
+    billboards {.pub.}: seq[TexBillboard]
+  
+  proc newTextureId*(vertexGLSL = defaultTextureVertexGLSL, fragmentGLSL = defaultTextureFragmentGLSL,
+      max = 1, model: openarray[TextureVertex] = rectangle, modelScale = 1.0, manualTextureBo = false, manualProgram = false): TextureId =
+    sysUpdateTextureData.billboards.add newTexBillboard(vertexGLSL = vertexGLSL, fragmentGLSL = fragmentGLSL, max = max, model = model,
+      modelScale = modelScale, manualTextureBo = manualTextureBo, manualProgram = manualProgram)
+    result = sysUpdateTextureData.billboards.high.TextureId
+    template bb: untyped = sysUpdateTextureData.billboards[result.int]
+    bb.rotMat[0] = 1.0
+  
+  proc update*(textureId: TextureId, texture: GLTexture) =
+    sysUpdateTextureData.billboards[textureId.int].updateTexture(texture)
 
 macro addOpenGLUpdateSystem*(sysOpts: ECSSysOptions, positionType: typedesc): untyped =
   ## Add the system to send model and position data to the GPU.
@@ -41,6 +74,21 @@ macro addOpenGLUpdateSystem*(sysOpts: ECSSysOptions, positionType: typedesc): un
 
         sys.curModelCount[mId.int].inc
 
+    makeSystemBody("updateTextureData"):
+      start:
+        # Reset texture counters.
+        for i in 0 ..< sys.billboards.len:
+          sys.billboards[i].resetItemPos
+      all:
+        # Populate instances.
+        let
+          tId = item.texture.textureId
+        sys.billboards[tId.int].addItems(1):
+          curItem.positionData =  vec4(item.`posIdent`.x, item.`posIdent`.y, item.`posIdent`.z, 1.0)
+          curItem.colour =        item.texture.col
+          curItem.rotation[0] =   item.texture.angle
+          curItem.scale =         item.texture.scale
+
     iterator activeModels*: tuple[model: ModelId, count: int] =
       ## Render only models that have been processed by `updateModelData`.
       for modelIndex in 0 ..< modelCount():
@@ -58,6 +106,11 @@ macro addOpenGLUpdateSystem*(sysOpts: ECSSysOptions, positionType: typedesc): un
       ## Render only models that have been processed by `updateModelData`.
       for modelInfo in activeModels():
         renderModelSetup(modelInfo.model, modelInfo.count, setup)
+    
+    proc renderActiveTextures* = 
+      for i in 0 ..< sysUpdateTextureData.billboards.len:
+        template bb: untyped = sysUpdateTextureData.billboards[i]
+        bb.render
   )
 
 template defineOpenGlRenders*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions, positionType: typedesc) {.dirty.} =
@@ -73,15 +126,17 @@ template defineOpenGlRenders*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions) 
   addOpenGLUpdateSystem(sysOpts, Position)
 
 
+# ----------------
+
 when isMainModule:
-  # Demo of model rendering ECS.
+  # Demo of a model and texture rendering ECS.
   # See also demos/particledemo.nim for an expanded version.
   #
   # This expects SDL2.dll to be in the current directory,
   # available from here: https://www.libsdl.org/download-2.0.php
 
   import opengl, sdl2, random, glbits/modelrenderer
-  from math import TAU, PI, degToRad, cos, sin, arctan2
+  from math import TAU, PI, degToRad, cos, sin, arctan2, sqrt
 
   when defined(debug):
     const maxEnts = 150_000
@@ -119,12 +174,17 @@ when isMainModule:
     all:
       item.position.x += item.velocity.x
       item.position.y += item.velocity.y
+    all:
       bounce(x)
       bounce(y)
 
-  makeSystemOpts("spin", [Model, Spin], sysOpts):
+  makeSystemOpts("spinModel", [Model, Spin], sysOpts):
     all:
       item.model.angle = item.model.angle + item.spin.access
+
+  makeSystemOpts("spinTexture", [Texture, Spin], sysOpts):
+    all:
+      item.texture.angle = item.texture.angle + item.spin.access
 
   template reactToPoint(offset, dist, speed: float): untyped =
     ## Move toward or away from point, based on multiplier.
@@ -154,6 +214,34 @@ when isMainModule:
   makeEcs(entOpts)
   commitSystems("run")
 
+  proc createBallTexture(texture: var GLTexture, w, h = 120) =
+    # Draw on a texture.
+    texture.initTexture(w, h)
+
+    proc dist(x1, y1, x2, y2: float): float =
+      let
+        diffX = x2 - x1
+        diffY = y2 - y1
+      result = sqrt((diffX * diffX) + (diffY * diffY))
+
+    let
+      centre = [texture.width / 2, texture.height / 2]
+      maxDist = dist(centre[0], centre[1], texture.width.float, texture.height.float)
+      spikes = 5.0
+
+    for y in 0 ..< texture.height:
+      for x in 0 ..< texture.width:
+        let
+          ti = texture.index(x, y)
+          diff = [centre[0] - x.float, centre[1] - y.float]
+          d = sqrt((diff[0] * diff[0]) + (diff[1] * diff[1]))
+          angle = diff[1].arcTan2 diff[0]
+          spikeMask = cos(spikes * angle)
+          normD = d / maxDist
+          edgeDist = smootherStep(1.0, 0.0, normD)
+        texture.data[ti] = vec4(edgeDist, edgeDist, edgeDist,
+          smootherStep(0.0, spikeMask, edgeDist))
+
   # Create window and OpenGL context.
   discard sdl2.init(INIT_EVERYTHING)
 
@@ -170,30 +258,41 @@ when isMainModule:
   loadExtensions()
   glClearColor(0.0, 0.0, 0.0, 1.0)                  # Set background color to black and opaque
   glClearDepth(1.0)                                 # Set background depth to farthest
+  glEnable(GL_DEPTH_TEST)                           # Enable depth testing for z-culling
+  glDepthFunc(GL_LEQUAL)                            # Set the type of depth-test
+  glEnable(GL_BLEND)                                # Enable alpha channel
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
 
   var
     evt = sdl2.defaultEvent
+    ballTextureData: GLTexture
     running = true
   let shaderProg = newModelRenderer()
 
   let
     circleModel = shaderProg.makeCircleModel(10, vec4(1.0, 0.0, 0.0, 1.0), vec4(0.5, 0.0, 0.5, 1.0))
     squareModel = shaderProg.makeCircleModel(4, vec4(0.0, 1.0, 0.0, 1.0), vec4(0.5, 0.5, 0.0, 1.0))
-    
+    ballTexture = newTextureId(max = maxEnts)
     maxCircles = maxEnts
     maxSquares = maxEnts
+
+  ballTextureData.createBallTexture()
+  ballTexture.update(ballTextureData)
 
   circleModel.setMaxInstanceCount(maxCircles)
   squareModel.setMaxInstanceCount(maxSquares)
 
   # Create some entities with our models.
-  var ents: seq[EntityRef]
-  for i in 0 ..< maxEnts:
+  var
+    ents: seq[EntityRef]
+
+  while entityCount() < maxEnts:
     let
       pos = Position(x: rand(-1.0..1.0), y: rand(-1.0..1.0), z: 0.0)
       speed = rand 0.005..0.01
-    if rand(1.0) < 0.1:
-      let scale = 0.007
+      r = rand(1.0)
+    if r < 0.1:
+      let scale = 0.01
       ents.add newEntityWith(
         Model(modelId: circleModel, scale: vec3(scale, scale, scale), angle: rand(TAU),
           col: vec4(rand 1.0, rand 1.0, 1.0, 1.0)),
@@ -201,8 +300,8 @@ when isMainModule:
         Velocity(x: rand(-speed..speed), y: rand(-speed..speed)),
         Spin(rand(-1.0..1.0).degToRad),
         AttractToMouse(dist: 0.4, speed: speed * 0.3))
-    else:
-      let scale = 0.004
+    elif r < 0.995:
+      let scale = 0.007
       ents.add newEntityWith(
         Model(modelId: squareModel, scale: vec3(scale, scale, scale), angle: rand(TAU),
           col: vec4(rand 1.0, rand 1.0, rand 1.0, 1.0)),
@@ -210,15 +309,33 @@ when isMainModule:
         Velocity(x: rand(-speed..speed), y: rand(-speed..speed)),
         Spin(rand(-1.0..1.0).degToRad),
         AvoidMouse(dist: 0.4, speed: speed))
+    else:
+      let scale = 0.025
+      ents.add newEntityWith(
+        Texture(textureId: ballTexture, scale: vec2(scale, scale), angle: rand(TAU),
+          col: vec4(rand 1.0, rand 1.0, rand 1.0, 1.0)),
+        pos,
+        Velocity(x: rand(-speed..speed), y: rand(-speed..speed)),
+        Spin(rand(-10.0..10.0).degToRad),
+      )
 
   var mousePos: GLvectorf2
 
   # Render loop.
   while running:
     while pollEvent(evt):
+
       if evt.kind == QuitEvent:
         running = false
         break
+
+      if evt.kind == WindowEvent:
+        var windowEvent = cast[WindowEventPtr](addr(evt))
+        if windowEvent.event == WindowEvent_Resized:
+          let newWidth = windowEvent.data1
+          let newHeight = windowEvent.data2
+          glViewport(0, 0, newWidth, newHeight)
+
       if evt.kind == MouseMotion:
         let
           mm = evMouseMotion(evt)
@@ -234,7 +351,8 @@ when isMainModule:
 
     run()
     renderActiveModels()
-
+    renderActiveTextures()
+    
     glFlush()
     window.glSwapWindow() # Swap the front and back frame buffers (double buffering)
 
