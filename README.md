@@ -24,11 +24,35 @@ Many component modules include a demonstration of how they can be used when run 
 
 *Module ecs_opengl*
 
-**Model**: Uses [glbits](https://github.com/rlipsc/glbits) to Displays a 3D model with OpenGL. The model is rendered with vertex buffer/array objects and instanced rendering, so is performant even with hundreds of thousands of instances.
+Uses [glbits](https://github.com/rlipsc/glbits) to render models and textures with OpenGL.
 
-Running ecs_opengl directly will execute the demo, which in release mode will generate 300,000 models, where some are attracted to the mouse and others repelled by it:
- 
-![ecs_opengl](../media/ecs_opengl.gif?raw=true)
+Pass in your own position component or use the default `Position`.
+
+**Model**: Displays a 3D model at the coordinates in the position component. The model is rendered with vertex buffer/array objects and instanced rendering, so is performant even with hundreds of thousands of instances.
+
+**Texture**: Displays a texture billboard instance at the coordinates in the position component.
+
+Running `ecs_opengl.nim` directly will execute the demo. This creates 400,000 entities to interact with the mouse, rendered as models or textures.
+
+https://user-images.githubusercontent.com/36367371/124194457-88e1af80-dac0-11eb-8077-16477add4eae.mp4
+
+### Physics
+
+*Module ecs_chipmunk2d*
+
+Uses [chipmunk2d](https://chipmunk-physics.net/) to simulate physics.
+
+**PhysicsBody**: A wrapper for the `chipmunk.body` object.
+
+**PhysicsShape**: A wrapper for `chipmunk.shape` objects.
+
+**BodyTemplate**: Substituted on construction with `PhysicsBody`.
+
+**ShapeTemplate**: Substituted on construction with `PhysicsShape`.
+
+Physics is combined with rendering using `ecs_opengl` in `demos/chipmunkballpit`:
+
+https://user-images.githubusercontent.com/36367371/124198657-04475f00-dac9-11eb-9000-fda888b270ff.mp4
 
 ### Console
 
