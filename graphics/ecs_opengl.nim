@@ -328,15 +328,13 @@ when isMainModule:
       if evt.kind == QuitEvent:
         running = false
         break
-
-      if evt.kind == WindowEvent:
+      elif evt.kind == WindowEvent:
         var windowEvent = cast[WindowEventPtr](addr(evt))
         if windowEvent.event == WindowEvent_Resized:
-          let newWidth = windowEvent.data1
-          let newHeight = windowEvent.data2
-          glViewport(0, 0, newWidth, newHeight)
-
-      if evt.kind == MouseMotion:
+          screenWidth = windowEvent.data1
+          screenHeight = windowEvent.data2
+          glViewport(0, 0, screenWidth, screenHeight)
+      elif evt.kind == MouseMotion:
         let
           mm = evMouseMotion(evt)
           normX = mm.x.float / screenWidth.float

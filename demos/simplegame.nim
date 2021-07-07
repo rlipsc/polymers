@@ -417,18 +417,24 @@ while running:
     if evt.kind == QuitEvent:
       running = false
       break
-    if evt.kind == MouseMotion:
+    elif evt.kind == WindowEvent:
+      var windowEvent = cast[WindowEventPtr](addr(evt))
+      if windowEvent.event == WindowEvent_Resized:
+        screenWidth = windowEvent.data1
+        screenHeight = windowEvent.data2
+        glViewport(0, 0, screenWidth, screenHeight)
+    elif evt.kind == MouseMotion:
       let
         mm = evMouseMotion(evt)
         normX = mm.x.float / screenWidth.float
         normY = 1.0 - (mm.y.float / screenHeight.float)
       mousePos[0] = (normX * 2.0) - 1.0
       mousePos[1] = (normY * 2.0) - 1.0
-    if evt.kind == MouseButtonDown:
+    elif evt.kind == MouseButtonDown:
       var mb = evMouseButton(evt)
       if mb.button == BUTTON_LEFT: mouseButtons.left = true
       if mb.button == BUTTON_RIGHT: mouseButtons.right = true
-    if evt.kind == MouseButtonUp:
+    elif evt.kind == MouseButtonUp:
       var mb = evMouseButton(evt)
       if mb.button == BUTTON_LEFT: mouseButtons.left = false
       if mb.button == BUTTON_RIGHT: mouseButtons.right = false
