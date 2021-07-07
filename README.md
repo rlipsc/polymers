@@ -116,6 +116,8 @@ Note that these use the `odbc` library found [here](https://github.com/coffeepot
 
 ## Demos
 
-* `dbbrowser`: A simple console program that uses a combination of components to read and display table field info and data within a database.
-* `netspeedtest`: Measures the speed of sending/receiving UDP packets on localhost by counting how many arrive within a set time frame.
+- `dbbrowser`: a simple console program that uses a combination of components to read and display table field info and data within a database.
+- `netspeedtest`: measures the speed of sending/receiving UDP packets on localhost by counting how many arrive within a set time frame.
+- `particlelife`: an implementation of the "Primordial Particle System" described [here](https://www.nature.com/articles/srep37969)
 
+https://user-images.githubusercontent.com/36367371/124841111-6d751980-df84-11eb-85c0-90280f2dca1f.mp4
