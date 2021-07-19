@@ -30,9 +30,6 @@ template defineDatabaseComponents*(compOpts: ECSCompOptions, sysOpts: ECSSysOpti
         title*: string
         data*: SQLResults
 
-  defineSystem("runQuery", [DatabaseConnection, Query], sysOpts)
-  defineSystem("connectToDb", [ConnectToDb], sysOpts)
-
   DatabaseConnection.onRemove:
     curComponent.connection.close
   
@@ -40,8 +37,9 @@ template defineDatabaseComponents*(compOpts: ECSCompOptions, sysOpts: ECSSysOpti
     if curComponent.query != nil:
       curComponent.query.freeQuery()
 
-template addDatabaseSystems*(sysOpts: EcsSysOptions): untyped =
+template defineDatabaseSystems*(sysOpts: EcsSysOptions): untyped =
   ## Perform the database queries.
+
   makeSystemOpts("connectToDb", [ConnectToDb], sysOpts):
     all:
       let existingCon = entity.fetchComponent DatabaseConnection
@@ -93,23 +91,26 @@ when isMainModule:
     co = defaultComponentOptions
     so = defaultSystemOptions
   defineDatabaseComponents(co, so)
-  addDatabaseSystems(so)
+  defineDatabaseSystems(so)
 
   makeEcs(eo)
   commitSystems("run")
 
-  let ctdb = ConnectToDb(
-    host: r"localhost\SQLEXPRESS",
-    driver: "SQL Server Native Client 11.0",
-    database: "test",
-    userName: "",
-    password: "",
-    integratedSecurity: true,
-    reportingLevel: rlErrorsAndInfo,
-    reportDest: {rdStore, rdEcho}
-  )
+  let
+    e = newEntityWith(
+      ConnectToDb(
+        host: r"localhost\SQLEXPRESS",
+        driver: "SQL Server Native Client 11.0",
+        database: "",
+        userName: "",
+        password: "",
+        integratedSecurity: true,
+        reportingLevel: rlErrorsAndInfo,
+        reportDest: {rdStore, rdEcho}
+      ),
+      Query(statement: "SELECT 1 + 1")
+    )
 
-  let e = newEntityWith( ctdb, Query(statement: "SELECT 1 + 1") )
   run()
 
   let res = e.fetchComponent QueryResult

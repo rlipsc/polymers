@@ -5,10 +5,9 @@ const
   sysOpts = defaultSystemOptions
   compOpts = defaultComponentOptions
 
-defineRenderChar(compOpts, sysOpts)
+defineRenderChar(compOpts)
 defineConsoleEvents(compOpts, sysOpts)
-#defineDatabaseComponents(compOpts, sysOpts)
-defineThreadedDatabaseComponents(compOpts, sysOpts)
+defineThreadedDatabaseComponents(compOpts)
 
 type DisplayRow = seq[tuple[ent: EntityRef, rs: RenderStringInstance]]
 
@@ -66,17 +65,22 @@ DisplayData.onRemoveCallback:
 defineSystem("resize",              [WindowEvent], sysOpts):
   lastX: uint16
   lastY: uint16
-defineSystem("inputString",         [EditString, KeyDown, RenderString], sysOpts):
-  numbersOnly: bool
 defineSystem("updateCursorPos",     [EditString, RenderString], sysOpts)
-defineSystem("escape",              [EditString, KeyDown], sysOpts):
-  escapePressed: bool
 
 defineSystem("fetchTables",         [DBConnectionInfo, FetchTables], sysOpts)
 defineSystem("fetchTableFields",    [DBConnectionInfo, FetchTableFields], sysOpts)
 defineSystem("fetchTableData",      [DBConnectionInfo, FetchTableData], sysOpts)
 
 defineSystem("updateDisplay",       [QueryResult, DisplayData], sysOpts)
+defineSystem("inputString",         [EditString, KeyDown, RenderString], sysOpts):
+  numbersOnly: bool
+
+# Update any created/altered RenderChar/RenderStrings
+defineRenderCharSystems(sysOpts)
+defineThreadedDatabaseSystems(sysOpts)
+
+defineSystem("escape",              [EditString, KeyDown], sysOpts):
+  escapePressed: bool
 
 defineSystem("controlTables",       [Tables, DisplayData, KeyDown, LineCursor], sysOpts)
 defineSystem("controlTableFields",  [TableFields, DisplayData, KeyDown, LineCursor], sysOpts)
@@ -258,11 +262,6 @@ makeSystem("inputString", [EditString, KeyDown, RenderString]):
           entity.consume item.keyDown, i
         else:
           discard
-
-# Update any created/altered RenderChar/RenderStrings
-addRenderCharSystems()
-#addDatabaseSystems()
-addThreadedDatabaseSystems()
 
 proc consume(entity: EntityRef, keyComp: KeyDownInstance | KeyUpInstance, i: int) =
   ## Remove a key, if empty remove component

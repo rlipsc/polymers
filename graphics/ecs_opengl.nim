@@ -31,32 +31,18 @@ template defineOpenGlComponents*(compOpts: ECSCompOptions, positionType: typedes
         angle*: GLfloat
         col*: GLvectorf4
 
-  defineSystem("updateModelData", [Model, positionType], sysOpts):
-    curModelCount {.pub.}: seq[int]
-
-  defineSystem("updateTextureData", [Texture, positionType], sysOpts):
-    billboards {.pub.}: seq[TexBillboard]
-  
-  proc newTextureId*(vertexGLSL = defaultTextureVertexGLSL, fragmentGLSL = defaultTextureFragmentGLSL,
-      max = 1, model: openarray[TextureVertex] = rectangle, modelScale = 1.0, manualTextureBo = false, manualProgram = false): TextureId =
-    sysUpdateTextureData.billboards.add newTexBillboard(vertexGLSL = vertexGLSL, fragmentGLSL = fragmentGLSL, max = max, model = model,
-      modelScale = modelScale, manualTextureBo = manualTextureBo, manualProgram = manualProgram)
-    result = sysUpdateTextureData.billboards.high.TextureId
-    template bb: untyped = sysUpdateTextureData.billboards[result.int]
-    bb.rotMat[0] = 1.0
-  
-  proc update*(textureId: TextureId, texture: GLTexture) =
-    sysUpdateTextureData.billboards[textureId.int].updateTexture(texture)
-
-macro addOpenGLUpdateSystem*(sysOpts: ECSSysOptions, positionType: typedesc): untyped =
+macro defineOpenGLUpdateSystems*(sysOpts: ECSSysOptions, positionType: typedesc): untyped =
   ## Add the system to send model and position data to the GPU.
   
   let posIdent = ident toLowerAscii($positionType)
 
   result = newStmtList(quote do:
-    makeSystemBody("updateModelData"):
+    makeSystemOpts("updateModelData", [Model, `positionType`], `sysOpts`):
       # This system populates the instance buffers and keeps track of
       # how many instances need to be rendered per model.
+      fields:
+        curModelCount {.pub.}: seq[int]
+
       start:
         # Reset model counters.
         sys.curModelCount.setLen modelCount()
@@ -74,7 +60,10 @@ macro addOpenGLUpdateSystem*(sysOpts: ECSSysOptions, positionType: typedesc): un
 
         sys.curModelCount[mId.int].inc
 
-    makeSystemBody("updateTextureData"):
+    makeSystemOpts("updateTextureData", [Texture, `positionType`], `sysOpts`):
+      # This system populates billboard instances.
+      fields:
+        billboards {.pub.}: seq[TexBillboard]
       start:
         # Reset texture counters.
         for i in 0 ..< sys.billboards.len:
@@ -111,11 +100,22 @@ macro addOpenGLUpdateSystem*(sysOpts: ECSSysOptions, positionType: typedesc): un
       for i in 0 ..< sysUpdateTextureData.billboards.len:
         template bb: untyped = sysUpdateTextureData.billboards[i]
         bb.render
+
+    proc newTextureId*(vertexGLSL = defaultTextureVertexGLSL, fragmentGLSL = defaultTextureFragmentGLSL,
+        max = 1, model: openarray[TextureVertex] = rectangle, modelScale = 1.0, manualTextureBo = false, manualProgram = false): TextureId =
+      sysUpdateTextureData.billboards.add newTexBillboard(vertexGLSL = vertexGLSL, fragmentGLSL = fragmentGLSL, max = max, model = model,
+        modelScale = modelScale, manualTextureBo = manualTextureBo, manualProgram = manualProgram)
+      result = sysUpdateTextureData.billboards.high.TextureId
+      template bb: untyped = sysUpdateTextureData.billboards[result.int]
+      bb.rotMat[0] = 1.0
+    
+    proc update*(textureId: TextureId, texture: GLTexture) =
+      sysUpdateTextureData.billboards[textureId.int].updateTexture(texture)
   )
 
 template defineOpenGlRenders*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions, positionType: typedesc) {.dirty.} =
   defineOpenGLComponents(compOpts, positionType)
-  addOpenGLUpdateSystem(sysOpts, positionType)
+  defineOpenGLUpdateSystems(sysOpts, positionType)
 
 template defineOpenGlRenders*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions) {.dirty.} =
   registerComponents(compOpts):
@@ -123,7 +123,7 @@ template defineOpenGlRenders*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions) 
       Position* = object
         x*, y*, z*: float
   defineOpenGLComponents(compOpts, Position)
-  addOpenGLUpdateSystem(sysOpts, Position)
+  defineOpenGLUpdateSystems(sysOpts, Position)
 
 
 # ----------------

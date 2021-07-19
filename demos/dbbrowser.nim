@@ -5,7 +5,7 @@ const
   sysOpts = defaultSystemOptions
   compOpts = defaultComponentOptions
 
-defineRenderChar(compOpts, sysOpts)
+defineRenderChar(compOpts)
 defineConsoleEvents(compOpts, sysOpts)
 defineDatabaseComponents(compOpts, sysOpts)
 
@@ -65,24 +65,29 @@ DisplayData.onRemoveCallback:
 defineSystem("resize",              [WindowEvent], sysOpts):
   lastX: uint16
   lastY: uint16
-defineSystem("inputString",         [EditString, KeyDown, RenderString], sysOpts):
-  numbersOnly: bool
 defineSystem("updateCursorPos",     [EditString, RenderString], sysOpts)
-defineSystem("escape",              [EditString, KeyDown], sysOpts):
-  escapePressed: bool
 
 defineSystem("fetchTables",         [DatabaseConnection, FetchTables], sysOpts)
 defineSystem("fetchTableFields",    [DatabaseConnection, FetchTableFields], sysOpts)
 defineSystem("fetchTableData",      [DatabaseConnection, FetchTableData], sysOpts)
 
 defineSystem("updateDisplay",       [QueryResult, DisplayData], sysOpts)
+defineSystem("inputString",         [EditString, KeyDown, RenderString], sysOpts):
+  numbersOnly: bool
+
+# Update any created/altered RenderChar/RenderStrings
+defineRenderCharSystems(sysOpts)
+defineDatabaseSystems(sysOpts)
+
+defineSystem("escape",              [EditString, KeyDown], sysOpts):
+  escapePressed: bool
 
 defineSystem("controlTables",       [Tables, DisplayData, KeyDown, LineCursor], sysOpts)
 defineSystem("controlTableFields",  [TableFields, DisplayData, KeyDown, LineCursor], sysOpts)
 defineSystem("controlTableData",    [TableData, DisplayData, KeyDown, LineCursor], sysOpts)
 
-defineSystem("dispLineCursor",      [LineCursor, DisplayData], sysOpts)
 defineSystem("lineCursorNav",       [LineCursor, KeyDown], sysOpts)
+defineSystem("dispLineCursor",      [LineCursor, DisplayData], sysOpts)
 
 makeEcs(entOpts)
 
@@ -252,10 +257,6 @@ makeSystem("inputString", [EditString, KeyDown, RenderString]):
           entity.consumeKey item.keyDown, i
         else:
           discard
-
-# Update any created/altered RenderChar/RenderStrings
-addRenderCharSystems()
-addDatabaseSystems(sysOpts)
 
 makeSystem("escape", [EditString, KeyDown]):
   all:

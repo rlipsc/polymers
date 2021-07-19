@@ -20,24 +20,21 @@ template defineKilling*(componentOptions: static[ECSCompOptions]): untyped {.dir
   KillAfter.onInit:
     curComponent.startTime = cpuTime()
 
-template addKillingSystems*(systemOptions: static[ECSSysOptions]): untyped =
+template defineKillingSystems*(systemOptions: static[ECSSysOptions]): untyped =
   # To effectively use a killed tag, it is desirable to be able to decide
   # where they are ultimately removed so that you can process Killed in your
   # own systems first.
-  defineSystem("killAfter", [KillAfter], systemOptions)
-  defineSystem("deleteKilled", [Killed], systemOptions)
-
   import times
 
   # This system's run order is fairly independent so hasn't been separated out to another template.
-  makeSystemBody("killAfter"):
+  makeSystemOpts("killAfter", [KillAfter], systemOptions):
     start:
       let curTime = cpuTime()
     all:
       if curTime - item.killAfter.startTime >= item.killAfter.duration:
         item.entity.addComponent Killed()
 
-  makeSystemBody("deleteKilled"):
+  makeSystemOpts("deleteKilled", [Killed], systemOptions):
     all:
       # Entities tagged with Killed are now removed.
       deleteEntity()

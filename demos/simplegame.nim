@@ -183,7 +183,7 @@ makeSystemOpts("killEnemies", [Enemy], sysOpts):
     sys.paused = true
 
 # Delete entities with the `Killed` component.
-addKillingSystems(sysOpts)
+defineKillingSystems(sysOpts)
 
 makeSystemOpts("fireBullet", [FireBullet, Position, Model], sysOpts):
   fields:

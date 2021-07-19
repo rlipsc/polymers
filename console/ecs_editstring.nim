@@ -128,9 +128,9 @@ when isMainModule:
     sOpts = dynamicSizeSystem()
     eOpts = dynamicSizeEntities()
   defineConsoleEvents(cOpts, sOpts)
-  defineRenderChar(cOpts, sOpts)
+  defineRenderChar(cOpts)
   defineAsk(cOpts, sOpts)
-  addRenderCharSystems()
+  defineRenderCharSystems(sOpts)
   
   makeEcs(eOpts)
   commitSystems("run")

@@ -1,6 +1,6 @@
 import polymorph
 
-template defineThreadedDatabaseComponents*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions) {.dirty.} =
+template defineThreadedDatabaseComponents*(compOpts: ECSCompOptions) {.dirty.} =
   import odbc, threadpool
   type
     QueryParam = tuple[field: string, value: SQLParam]
@@ -37,10 +37,8 @@ template defineThreadedDatabaseComponents*(compOpts: ECSCompOptions, sysOpts: EC
         data*: SQLResults
         errors*: seq[string]
 
-  defineSystem("runQuery", [DBConnectionInfo, ThreadQuery], sysOpts)
-  defineSystem("pendingQueries", [QueryRunning])
-
-template addThreadedDatabaseSystems*: untyped {.dirty.} =
+template defineThreadedDatabaseSystems*(sysOpts: ECSSysOptions): untyped {.dirty.} =
+  ## Perform the database queries.
   proc doExecQuery(connectionInfo: DBConnectionInfo, queryText: string, params: QueryParams): seq[SQLRow] {.gcSafe.} =
     var con = newODBCConnection()
     try:
@@ -67,7 +65,7 @@ template addThreadedDatabaseSystems*: untyped {.dirty.} =
     finally:
       con.freeConnection
 
-  makeSystem("runQuery", [DBConnectionInfo, ThreadQuery]):
+  makeSystemOpts("runQuery", [DBConnectionInfo, ThreadQuery], sysOpts):
     all:
       if not item.threadQuery.dispatched:
         item.threadQuery.dispatched = true
@@ -95,7 +93,7 @@ template addThreadedDatabaseSystems*: untyped {.dirty.} =
         if not item.threadQuery.persistent:
           entity.removeComponent ThreadQuery
 
-  makeSystem("pendingQueries", [QueryRunning]):
+  makeSystemOpts("pendingQueries", [QueryRunning], sysOpts):
     all:
       for i in countDown(item.queryRunning.pending.high, 0):
         template curPending: untyped = item.queryRunning.pending[i]
@@ -114,8 +112,8 @@ when isMainModule:
     eo = defaultEntityOptions
     co = defaultComponentOptions
     so = defaultSystemOptions
-  defineThreadedDatabaseComponents(co, so)
-  addThreadedDatabaseSystems()
+  defineThreadedDatabaseComponents(co)
+  defineThreadedDatabaseSystems(so)
 
   makeEcs(eo)
   commitSystems("run")

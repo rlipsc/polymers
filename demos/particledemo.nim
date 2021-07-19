@@ -8,7 +8,7 @@
   
   To register when a particle is near the mouse, the CheckRadius component is used.
   Several systems piggy back on the results stored in this component to perform colouring and
-  movement. This version uses a bool to indicate the source point (mouse) is inside it's radius.
+  movement. This version uses a bool to indicate the source point (mouse) is inside its radius.
   The same effect can be achieved by adding a separate component when satisfied and write 
   systems to use that, similar to the grabbing mechanism below.
 

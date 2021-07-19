@@ -3,16 +3,20 @@
   The x and y components are translated from -1.0 .. 1.0 to scale between 
   zero and width/ height.
 
-  Each square keeps track of which render instances invoked it's character, and
+  Each square keeps track of which render instances invoked its character, and
   only the first entity to render to a clear cell will be shown.
 ]#
 
 import polymorph
 
-template defineRenderChar*(componentOptions: static[ECSCompOptions], systemOptions: static[ECSSysOptions]): untyped {.dirty.} =
+template defineRenderChar*(componentOptions: static[ECSCompOptions]): untyped {.dirty.} =
   import terminal
   export terminal
   from winlean import Handle
+  
+  const
+    defaultRCWidth* = 80
+    defaultRCHeight* = 20
   
   ## Add types and define systems for rendering x,y positions of characters to the terminal.
   registerComponents(componentOptions):
@@ -83,146 +87,37 @@ template defineRenderChar*(componentOptions: static[ECSCompOptions], systemOptio
     SmallRect = object
       left, top, right, bottom: uint16
 
-  const
-    defaultWidth = 80
-    defaultHeight = 20
-  
-  defineSystem("updateState", [RenderChar], systemOptions)
-  defineSystem("calcDensity", [RenderChar], systemOptions)
-  defineSystem("densityChar", [RenderChar, DensityChar], systemOptions)
-
-  defineSystem("renderString", [RenderString], systemOptions):
-    charWidth {.pub.}       -> float = 2.0 / defaultWidth.float
-    charHeight {.pub.}      -> float = 2.0 / defaultHeight.float
-
-  defineSystem("renderChar", [RenderChar], systemOptions):
-    width {.pub.}           -> int = defaultWidth
-    height {.pub.}          -> int = defaultHeight
-    foregroundCol {.pub.}   -> ForegroundColor = fgWhite
-    backgroundCol {.pub.}   -> BackgroundColor = bgBlack
-    states {.pub.}          -> seq[CharCellState] = newSeq[CharCellState](sys.width * sys.height)
-    maxDensity {.pub.}      : Natural # Populated in the update systems.
-    hWidth {.pub.}          -> int = defaultWidth div 2
-    hHeight {.pub.}         -> int = defaultHeight div 2
-    charWidth {.pub.}       -> float = 2.0 / defaultWidth.float
-    charHeight {.pub.}      -> float = 2.0 / defaultHeight.float
-    charSize {.pub.}        -> float = (sys.charWidth + sys.charHeight) / 2.0
-    offset {.pub.}          : tuple[x, y: int]
-    consoleOut              -> ConsoleBlock = newSeq[CharInfo](sys.states.len)
-    stdOutHandle            : Handle
-    bufferSize              -> CharCoord = CharCoord(x: sys.width.uint16, y: sys.height.uint16)
-    bufferCoord             -> CharCoord = CharCoord(x: sys.offset.x.uint16, y: sys.offset.y.uint16)
-    writeRegion             -> SmallRect = SmallRect(
-                                left: sys.offset.x.uint16,
-                                top: sys.offset.y.uint16,
-                                right: sys.width.uint16,
-                                bottom: sys.height.uint16)
-
-  # Utility functions
-  #------------------
-
-  proc setDimensions*(sys: var RenderCharSystem, width, height: Natural) =
-    sys.width = width
-    sys.height = height
-    sys.hWidth = sys.width div 2
-    sys.hHeight = sys.height div 2
-    sys.charWidth = 2.0 / sys.width.float
-    sys.charHeight = 2.0 / sys.height.float
-    sys.charSize = (sys.charWidth + sys.charHeight) / 2.0
-    sys.bufferSize = CharCoord(x: sys.width.uint16, y: sys.height.uint16)
-    sys.bufferCoord = CharCoord(x: sys.offset.x.uint16, y: sys.offset.y.uint16)
-    sys.writeRegion = SmallRect(
-      left: sys.offset.x.uint16,
-      top: sys.offset.y.uint16,
-      right: sys.width.uint16,
-      bottom: sys.height.uint16)
-    sys.states.setLen sys.width * sys.height
-
-  proc setDimensions*(sys: var RenderStringSystem, width, height: Natural) =
-    sys.charWidth = 2.0 / width.float
-    sys.charHeight = 2.0 / height.float
-
-  template clear*(sys: var RenderCharSystem, index: int): untyped =
-    ## Queue an index for clearing.
-    ## Note that if the RenderChar for this index isn't actually deleted, it will be re-added in the update system.
-    if index.validCharIdx and sys.states[index].state notin [csClear, csDoClear]:
-      sys.states[index].state = csDoClear
-      # Update the state's item count.
-      let count = sys.states[index].count
-      sys.states[index].count = max(0, count - 1)
-
-  template clear*(sys: var RenderCharSystem, renderInst: RenderCharInstance): untyped =
-    ## Clears current position if this render instance is currently being displayed.
-    ## Note that if the RenderChar isn't actually deleted, it will be re-added in the update system.
-    sys.clear(renderInst.index)
-
-  template setChar*(sys: var RenderCharSystem, renderInst: RenderCharInstance): untyped =
-    ## Forces a particular character to the display.
-    if renderInst.index.validCharIdx:
-      sys.states[renderInst.index].render = renderInst
-      sys.states[renderInst.index].state = csCharacter
-      # Update the state's item count.
-      sys.states[renderInst.index].count += 1
-
-  template setChar*(renderInst: RenderCharInstance): untyped = sysRenderChar.setChar(renderInst)
+  RenderString.onRemoveCallback:
+    # Remove stored entities.
+    for characterEnt in curComponent.characters:
+      let charComp = characterEnt.fetchComponent RenderChar
+      assert charComp.valid
+      # Triggers RenderChar's onRemove.
+      characterEnt.delete
 
   template charPos*(x, y: float, hWidth, hHeight: int): tuple[x, y: int] =
     ## Returns cell coordinates of render.
     (int(hWidth.float + x * hWidth.float),
     int(hHeight.float + y * hHeight.float))
-    
-  template charPos*(sys: RenderCharSystem, render: RenderCharInstance): tuple[x, y: int] =
-    ## Returns cell coordinates of render component.
-    charPos(render.x, render.y, sys.hWidth, sys.hHeight)
-    
-  template validCharIdx*(sys: RenderCharSystem, index: int): bool = index in 0 ..< sys.states.len
 
-  template clearLastPos*(sys: var RenderCharSystem, renderInst: RenderCharInstance): untyped =
-    ## Clears last calculated position if this render instance is currently being displayed.
-    if renderInst.lastIndex.validCharIdx and sys.states[renderInst.lastIndex].render == renderInst:
-      sys.clear(renderInst.lastIndex)
-  template clear*(index: int): untyped = sysRenderChar.clear(index)
-  template clear*(renderInst: RenderCharInstance): untyped = sysRenderChar.clear(renderInst)
-  template clearLastPos*(renderInst: RenderCharInstance): untyped = sysRenderChar.clearLastPos(renderInst)
+template defineRenderCharUpdate*(systemOptions: static[ECSSysOptions]): untyped {.dirty.} =
+  ## Insert systems for updating the state of `RenderChar` and
+  ## `RenderString` without rendering.
+  ## This can be useful if you need to use the char's `index` or
+  ## `density` fields, to ensure `RenderString`'s `character` is
+  ## updated to its `text` field, or want to manipulate them
+  ## before rendering.
 
-  template charPosIndex*(sys: RenderCharSystem, x, y: int): int = y * sys.width + x
-  proc charPosIndex*(sys: RenderCharSystem, pos: tuple[x, y: int]): int {.inline.} = sys.charPosIndex(pos.x, pos.y)
-  template charPosIndex*(sys: RenderCharSystem, x, y: float): int = charPos(x, y, sys.hWidth, sys.hHeight).charPosIndex
-  template charPos*(x, y: float): tuple[x, y: int] = charPos(x, y, sysRenderChar.hWidth, sysRenderChar.hHeight)
-  template charPos*(render: RenderCharInstance): tuple[x, y: int] = sysRenderChar.charPos(render)
-  template validCharIdx*(index: int): bool = sysRenderChar.validCharIdx(index)
-  template charPosIndex*(x, y: int): int = y * sysRenderChar.width + x
-  template charPosIndex*(x, y: float): int = charPos(x, y, sysRenderChar.hWidth, sysRenderChar.hHeight).charPosIndex
-  proc charPosIndex*(pos: tuple[x, y: int]): int = sysRenderChar.charPosIndex(pos.x, pos.y)
+  defineSystem("updateState", [RenderChar], systemOptions)
+  defineSystem("calcDensity", [RenderChar], systemOptions)
+  defineSystem("densityChar", [RenderChar, DensityChar], systemOptions)
+  defineSystem("renderString", [RenderString], systemOptions):
+    charWidth {.pub.}       -> float = 2.0 / defaultRCWidth.float
+    charHeight {.pub.}      -> float = 2.0 / defaultRCHeight.float
 
-  template charIndexCoord*(sys: RenderCharSystem, index: int): tuple[x, y: float] =
-    let
-      nx = (index mod sys.width).float / sys.width.float 
-      ny = (index div sys.width).float / sys.height.float
-      sx = (nx * 2.0) - 1.0
-      sy = (ny * 2.0) - 1.0
-    (x: sx, y: sy)
-
-  template charIndexCoord*(index: int): untyped = sysRenderChar.charIndexCoord(index)
-
-  proc updateIndex*(render: RenderCharInstance | var RenderChar) =
-    ## Updates the index in `render` according to it's x and y.
-    render.index = sysRenderChar.charPosIndex(render.x, render.y)
-
-  template normaliseCharCoords*(x, y: int): tuple[x, y: float] =
-    ## Converts character coordinates to normalised -1.0 .. 1.0 space.
-    charPosIndex(x, y).charIndexCoord()
-
-  template indexCentre*(sys: RenderCharSystem, index: int): untyped =
-    let r = sys.charIndexCoord(index)
-    (x: r.x + sys.charWidth * 0.5, y: r.y + sys.charHeight * 0.5)
-
-  template indexCentre*(index: int): untyped = sysRenderChar.indexCentre(index)
-
-  template centreCharCoord*(x, y: float): tuple[x, y: float] = charPos(x, y).charPosIndex.indexCentre
-
-  ## Returns the x offset to add to x to center a RenderString.
-  template centreX*(value: string): float = -value.len.float * 0.5 * sysRenderChar.charWidth
+  proc setDimensions*(sys: var RenderStringSystem, width, height: Natural) =
+    sys.charWidth = 2.0 / width.float
+    sys.charHeight = 2.0 / height.float
 
   # Used in DensityChar.
   proc asChar*(num: float): char =
@@ -241,31 +136,8 @@ template defineRenderChar*(componentOptions: static[ECSCompOptions], systemOptio
     elif  num < 0.8:  '@'
     else: '#'
 
-  # Initialising/de-initialising
-  #-----------------------------
-
-  RenderChar.onRemove:
-    # Mark this display char as clear when a RenderChar is removed from an entity
-    # or the entity is deleted.
-    curComponent.clear
-  RenderString.onRemoveCallback:
-    # Remove stored entities.
-    for characterEnt in curComponent.characters:
-      let charComp = characterEnt.fetchComponent RenderChar
-      assert charComp.valid
-      # Triggers RenderChar's onRemove.
-      characterEnt.delete
-
-template addRenderCharUpdate*(): untyped =
-  ## Insert systems for updating the state of `RenderChar` and
-  ## `RenderString` without rendering.
-  ## This can be useful if you need to use the char's `index` or
-  ## `density` fields, to ensure `RenderString`'s `character` is
-  ## updated to it's `text` field, or want to manipulate them
-  ## before rendering.
   makeSystemBody("renderString"):
     all:
-      # TODO: Currently only updates default instance of sysRenderChar.
       let
         rs = item.renderString
         coordChange = rs.x != rs.lastX or rs.y != rs.lastY
@@ -396,14 +268,36 @@ template addRenderCharUpdate*(): untyped =
         # Overwrite current char.
         item.renderChar.character = selectedChar
 
-template addRenderCharOutput*(): untyped =
+template defineRenderCharOutput*(systemOptions: static[ECSSysOptions]): untyped {.dirty.} =
   ## Implement the system for outputting the RenderChars.
   from winlean import getStdHandle, STD_OUTPUT_HANDLE, WINBOOL
   
   proc writeConsoleOutput*(hConsoleOutput: Handle, lpBuffer: ptr CharInfo, dwBufferSize, dwBufferCoord: CharCoord, lpWriteRegion: ptr SmallRect
     ): WINBOOL {.stdcall, dynlib: "kernel32", importc: "WriteConsoleOutputW".}
 
-  makeSystemBody("renderChar"):
+  makeSystemOpts("renderChar", [RenderChar], systemOptions):
+    fields:
+      width {.pub.}           -> int = defaultRCWidth
+      height {.pub.}          -> int = defaultRCHeight
+      foregroundCol {.pub.}   -> ForegroundColor = fgWhite
+      backgroundCol {.pub.}   -> BackgroundColor = bgBlack
+      states {.pub.}          -> seq[CharCellState] = newSeq[CharCellState](sys.width * sys.height)
+      maxDensity {.pub.}      : Natural # Populated in the update systems.
+      hWidth {.pub.}          -> int = defaultRCWidth div 2
+      hHeight {.pub.}         -> int = defaultRCHeight div 2
+      charWidth {.pub.}       -> float = 2.0 / defaultRCWidth.float
+      charHeight {.pub.}      -> float = 2.0 / defaultRCHeight.float
+      charSize {.pub.}        -> float = (sys.charWidth + sys.charHeight) / 2.0
+      offset {.pub.}          : tuple[x, y: int]
+      consoleOut              -> ConsoleBlock = newSeq[CharInfo](sys.states.len)
+      stdOutHandle            : Handle
+      bufferSize              -> CharCoord = CharCoord(x: sys.width.uint16, y: sys.height.uint16)
+      bufferCoord             -> CharCoord = CharCoord(x: sys.offset.x.uint16, y: sys.offset.y.uint16)
+      writeRegion             -> SmallRect = SmallRect(
+                                  left: sys.offset.x.uint16,
+                                  top: sys.offset.y.uint16,
+                                  right: sys.width.uint16,
+                                  bottom: sys.height.uint16)
     init:
       sys.stdOutHandle = getStdHandle(STD_OUTPUT_HANDLE)
       if 1 == 0: quit $sys.consoleOut.len
@@ -490,9 +384,108 @@ template addRenderCharOutput*(): untyped =
         sys.bufferCoord,
         sys.writeRegion.addr) != 0)
 
-template addRenderCharSystems*: untyped =
+  RenderChar.onRemove:
+    # Mark this display char as clear when a RenderChar is removed from an entity
+    # or the entity is deleted.
+    curComponent.clear
+
+  proc setDimensions*(sys: var RenderCharSystem, width, height: Natural) =
+    sys.width = width
+    sys.height = height
+    sys.hWidth = sys.width div 2
+    sys.hHeight = sys.height div 2
+    sys.charWidth = 2.0 / sys.width.float
+    sys.charHeight = 2.0 / sys.height.float
+    sys.charSize = (sys.charWidth + sys.charHeight) / 2.0
+    sys.bufferSize = CharCoord(x: sys.width.uint16, y: sys.height.uint16)
+    sys.bufferCoord = CharCoord(x: sys.offset.x.uint16, y: sys.offset.y.uint16)
+    sys.writeRegion = SmallRect(
+      left: sys.offset.x.uint16,
+      top: sys.offset.y.uint16,
+      right: sys.width.uint16,
+      bottom: sys.height.uint16)
+    sys.states.setLen sys.width * sys.height
+
+  template clear*(sys: var RenderCharSystem, index: int): untyped =
+    ## Queue an index for clearing.
+    ## Note that if the RenderChar for this index isn't actually deleted, it will be re-added in the update system.
+    if index.validCharIdx and sys.states[index].state notin [csClear, csDoClear]:
+      sys.states[index].state = csDoClear
+      # Update the state's item count.
+      let count = sys.states[index].count
+      sys.states[index].count = max(0, count - 1)
+
+  template clear*(sys: var RenderCharSystem, renderInst: RenderCharInstance): untyped =
+    ## Clears current position if this render instance is currently being displayed.
+    ## Note that if the RenderChar isn't actually deleted, it will be re-added in the update system.
+    sys.clear(renderInst.index)
+
+  template setChar*(sys: var RenderCharSystem, renderInst: RenderCharInstance): untyped =
+    ## Forces a particular character to the display.
+    if renderInst.index.validCharIdx:
+      sys.states[renderInst.index].render = renderInst
+      sys.states[renderInst.index].state = csCharacter
+      # Update the state's item count.
+      sys.states[renderInst.index].count += 1
+
+  template setChar*(renderInst: RenderCharInstance): untyped = sysRenderChar.setChar(renderInst)
+
+  template charPos*(sys: RenderCharSystem, render: RenderCharInstance): tuple[x, y: int] =
+    ## Returns cell coordinates of render component.
+    charPos(render.x, render.y, sys.hWidth, sys.hHeight)
+    
+  template validCharIdx*(sys: RenderCharSystem, index: int): bool = index in 0 ..< sys.states.len
+
+  template clearLastPos*(sys: var RenderCharSystem, renderInst: RenderCharInstance): untyped =
+    ## Clears last calculated position if this render instance is currently being displayed.
+    if renderInst.lastIndex.validCharIdx and sys.states[renderInst.lastIndex].render == renderInst:
+      sys.clear(renderInst.lastIndex)
+  template clear*(index: int): untyped = sysRenderChar.clear(index)
+  template clear*(renderInst: RenderCharInstance): untyped = sysRenderChar.clear(renderInst)
+  template clearLastPos*(renderInst: RenderCharInstance): untyped = sysRenderChar.clearLastPos(renderInst)
+
+  template charPosIndex*(sys: RenderCharSystem, x, y: int): int = y * sys.width + x
+  proc charPosIndex*(sys: RenderCharSystem, pos: tuple[x, y: int]): int {.inline.} = sys.charPosIndex(pos.x, pos.y)
+  template charPosIndex*(sys: RenderCharSystem, x, y: float): int = charPos(x, y, sys.hWidth, sys.hHeight).charPosIndex
+  template charPos*(x, y: float): tuple[x, y: int] = charPos(x, y, sysRenderChar.hWidth, sysRenderChar.hHeight)
+  template charPos*(render: RenderCharInstance): tuple[x, y: int] = sysRenderChar.charPos(render)
+  template validCharIdx*(index: int): bool = sysRenderChar.validCharIdx(index)
+  template charPosIndex*(x, y: int): int = y * sysRenderChar.width + x
+  template charPosIndex*(x, y: float): int = charPos(x, y, sysRenderChar.hWidth, sysRenderChar.hHeight).charPosIndex
+  proc charPosIndex*(pos: tuple[x, y: int]): int = sysRenderChar.charPosIndex(pos.x, pos.y)
+
+  template charIndexCoord*(sys: RenderCharSystem, index: int): tuple[x, y: float] =
+    let
+      nx = (index mod sys.width).float / sys.width.float 
+      ny = (index div sys.width).float / sys.height.float
+      sx = (nx * 2.0) - 1.0
+      sy = (ny * 2.0) - 1.0
+    (x: sx, y: sy)
+
+  template charIndexCoord*(index: int): untyped = sysRenderChar.charIndexCoord(index)
+
+  proc updateIndex*(render: RenderCharInstance | var RenderChar) =
+    ## Updates the index in `render` according to its x and y.
+    render.index = sysRenderChar.charPosIndex(render.x, render.y)
+
+  template normaliseCharCoords*(x, y: int): tuple[x, y: float] =
+    ## Converts character coordinates to normalised -1.0 .. 1.0 space.
+    charPosIndex(x, y).charIndexCoord()
+
+  template indexCentre*(sys: RenderCharSystem, index: int): untyped =
+    let r = sys.charIndexCoord(index)
+    (x: r.x + sys.charWidth * 0.5, y: r.y + sys.charHeight * 0.5)
+
+  template indexCentre*(index: int): untyped = sysRenderChar.indexCentre(index)
+
+  template centreCharCoord*(x, y: float): tuple[x, y: float] = charPos(x, y).charPosIndex.indexCentre
+
+  ## Returns the x offset to add to x to center a RenderString.
+  template centreX*(value: string): float = -value.len.float * 0.5 * sysRenderChar.charWidth
+
+template defineRenderCharSystems*(systemOptions: static[ECSSysOptions]): untyped =
   ## Update then render, for when you have no need to work with
   ## state before rendering.
-  addRenderCharUpdate()
-  addRenderCharOutput()
+  defineRenderCharUpdate(systemOptions)
+  defineRenderCharOutput(systemOptions)
 

@@ -4,7 +4,7 @@
 
 import polymorph
 
-template defineSpawnAfter*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions): untyped {.dirty.} =
+template defineSpawnAfter*(compOpts: ECSCompOptions): untyped {.dirty.} =
   from times import epochTime
 
   registerComponents(compOpts):
@@ -17,10 +17,8 @@ template defineSpawnAfter*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions): un
   SpawnAfter.onAdd:
     curComponent.startTime = epochTime()
 
-  defineSystem("spawnAfter", [SpawnAfter], sysOpts)
-
-template addSpawnAfterSystem*: untyped {.dirty.} =
-  makeSystemBody("spawnAfter"):
+template defineSpawnAfterSystem*(sysOpts: ECSSysOptions): untyped {.dirty.} =
+  makeSystemOpts("spawnAfter", [SpawnAfter], sysOpts):
     start:
       let curTime = epochTime()
     all:

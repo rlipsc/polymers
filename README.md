@@ -82,7 +82,7 @@ This module uses `ecs_renderchar` and `ecs_consoleevents` to create mouse driven
 
 **MouseButton**: Allows defining a size, text alignment, background and border options. Full access to the **RenderChar** entities is given so they may be edited. Generates event components such as **MouseButtonClicked** and **MouseButtonMouseOver** for systems to respond to.
 
-**DrawMouse**: Tag an entity with this component so that it's character is drawn at the mouse location.
+**DrawMouse**: Tag an entity with this component so that its character is drawn at the mouse location.
 
 ### Database
 
@@ -90,7 +90,7 @@ There are two version of the database components, `ecs_db_threads` for threaded 
 
 Note that these use the `odbc` library found [here](https://github.com/coffeepots/odbc).
 
-**ConnectToDb**: Initiates a connection to the database with it's contained parameters. Once connection is established, it is removed and a **DatabaseConnection** component is added to the entity.
+**ConnectToDb**: Initiates a connection to the database with its contained parameters. Once connection is established, it is removed and a **DatabaseConnection** component is added to the entity.
 
 **Query**: Performs a query when a **DatabaseConnection** is present. When a result is obtained, it is placed within a **QueryResult** component and added to the entity.
 
