@@ -556,7 +556,7 @@ template defineTcpNetworking*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions, 
       else:
         discard reportError("Creating new socket")
 
-      let addSocketToPortRes = createIoCompletionPort(
+      let addSocketToPortRes {.used.} = createIoCompletionPort(
         socket.Handle,
         ioPort.Handle,
         CompletionKey(ctTcpOperation),
@@ -657,14 +657,14 @@ template defineTcpNetworking*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions, 
   proc awaitConnection*(tcpListen: var TcpListen) =
     let ol = tcpListen.overlappedRead.addr
     # Initialise receive buffer.
-    let acceptRes = beginAccept(ol, clearMem = false)
-    let res = reportError("Accept")
+    let acceptRes {.used.} = beginAccept(ol, clearMem = false)
+    let res {.used.} = reportError("Accept")
 
   proc awaitConnection*(tcpRecv: var TcpRecv) =
     let ol = tcpRecv.overlappedRead.addr
     # Initialise receive buffer.
-    let acceptRes = beginAccept(ol, clearMem = false)
-    let res = reportError("Accept")
+    let acceptRes {.used.} = beginAccept(ol, clearMem = false)
+    let res {.used.} = reportError("Accept")
 
   proc connect*(connection: var TcpConnection, tcpSend: var TcpSend) =
     ## Implements `connectEx` with `tcpSend`.
@@ -683,7 +683,7 @@ template defineTcpNetworking*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions, 
     info.socket = connectSock
     connection.socket = connectSock
 
-    let r = createIoCompletionPort(info.socket.Handle, connection.ioPort.Handle, CompletionKey(ctTcpOperation), 0)
+    let r {.used.} = createIoCompletionPort(info.socket.Handle, connection.ioPort.Handle, CompletionKey(ctTcpOperation), 0)
 
     info.state  = csConnecting
 
@@ -818,7 +818,7 @@ template defineTcpNetworking*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions, 
 
       let
         flags = {SocketFlag.SafeDisconn}.toOSFlags().DWORD
-        ret = WSASend(
+        ret {.used.} = WSASend(
           info.socket,
           olSend.sendBuffer.addr,
           1,
@@ -894,14 +894,14 @@ template defineTcpNetworking*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions, 
     proc awaitConnection*(entity: EntityRef, tcpListen: var TcpListen) =
       let ol = tcpListen.overlappedRead.addr
       # Initialise receive buffer.
-      let acceptRes = entity.beginAccept(ol, clearMem = false)
-      let res = entity.reportError("Accept")
+      let acceptRes {.used.} = entity.beginAccept(ol, clearMem = false)
+      let res {.used.} = entity.reportError("Accept")
 
     proc awaitConnection*(entity: EntityRef, tcpRecv: var TcpRecv) =
       let ol = tcpRecv.overlappedRead.addr
       # Initialise receive buffer.
-      let acceptRes = entity.beginAccept(ol, clearMem = false)
-      let res = entity.reportError("Accept")
+      let acceptRes {.used.} = entity.beginAccept(ol, clearMem = false)
+      let res {.used.} = entity.reportError("Accept")
 
 
   # -------
@@ -1061,7 +1061,7 @@ template defineTcpNetworking*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions, 
 
             var totalBytes: DWORD
             let
-              sizeSuccess = getOverlappedResult(
+              sizeSuccess {.used.} = getOverlappedResult(
                 olRead.info.socket.Handle,
                 overlappedAddr,
                 totalBytes,
