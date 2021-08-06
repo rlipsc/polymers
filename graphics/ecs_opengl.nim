@@ -253,7 +253,7 @@ when isMainModule:
     yOffset: cint = 50
 
   var window = createWindow("SDL/OpenGL Skeleton", xOffset, yOffset, screenWidth, screenHeight, SDL_WINDOW_OPENGL or SDL_WINDOW_RESIZABLE)
-  var context = window.glCreateContext()
+  var context {.used.} = window.glCreateContext()
 
   # Initialize OpenGL
   loadExtensions()
