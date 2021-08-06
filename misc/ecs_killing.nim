@@ -1,8 +1,6 @@
-#[
-  Simple ECS plugin for adding a Killed component after some delay.
-  This allows you to mark entities for clean up for example by using Killed
-  as a system requirement. 
-]#
+## Simple ECS plugin for adding a Killed component after some delay.
+## This allows you to mark entities for clean up for example by using Killed
+## as a system requirement. 
 
 import polymorph
 
@@ -28,14 +26,14 @@ template defineKillingSystems*(systemOptions: static[ECSSysOptions]): untyped =
 
   # This system's run order is fairly independent so hasn't been separated out to another template.
   makeSystemOpts("killAfter", [KillAfter], systemOptions):
-    start:
-      let curTime = cpuTime()
+    let
+      curTime = cpuTime()
+
     all:
       if curTime - item.killAfter.startTime >= item.killAfter.duration:
-        item.entity.addComponent Killed()
+        item.entity.addIfMissing Killed()
 
   makeSystemOpts("deleteKilled", [Killed], systemOptions):
     all:
       # Entities tagged with Killed are now removed.
-      deleteEntity()
-
+      entity.delete
