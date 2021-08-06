@@ -225,10 +225,10 @@ makeSystem("updateDisplay", [QueryResult, DisplayData]):
 
 # Turn a RenderString into an edit box.
 makeSystem("inputString", [EditString, KeyDown, RenderString]):
-  start:
-    let validKeys = 
-      if sys.numbersOnly: Digits
-      else: Letters + Digits
+  let validKeys = 
+    if sys.numbersOnly: Digits
+    else: Letters + Digits
+
   all:
     template xPos: untyped = item.editString.xPos
     template curLen: int = item.renderString.text.len
@@ -436,7 +436,6 @@ proc main() =
     KeyChange(),
     WindowChange())
   
-  var finished: bool
   while not dbBrowser.hasComponent Quit:
     run()
 

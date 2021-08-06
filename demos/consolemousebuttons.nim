@@ -65,8 +65,8 @@ makeSystemOpts("animateButtons", [ApplyAnimateChar, MouseButton], sysOpts):
 # We want the animate system to run after MouseButton system has updated its RenderChars,
 # but before they're actually rendered.
 makeSystemOpts("animate", [AnimateChar, ButtonChar, RenderChar], sysOpts):
-  start:
-    let curTime = epochTime()
+  let
+    curTime = epochTime()
   all:
     # Change button characters over time.
     item.renderChar.character = item.animateChar.chars[item.animateChar.frameIndex]

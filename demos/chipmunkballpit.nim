@@ -49,20 +49,20 @@ registerComponents(compOpts):
 defineOpenGlComponents(compOpts, Position)
 
 makeSystemOpts("fizzy", [PhysicsBody, Fizzy], sysOpts):
-  start:
-    # This system applies randomised forces to the physics body.
-    #
-    # Chipmunk considers v(0.0, 0.0) as the centre of gravity for
-    # applying forces. Using an offset from this causes a rotational
-    # effect, according to the mass and force involved.
-    #
-    # In this case, the body is pushed along from the "front" (the
-    # strongly coloured point in the matching model), causing the
-    # "back" to align over time.
-    #
-    # With an offset of v(0.0, 0.0) to apply the force, the body would
-    # continue at its current angle until there was a collision.
-    const offset = v(0.0, 0.5)
+  # This system applies randomised forces to the physics body.
+  #
+  # Chipmunk considers v(0.0, 0.0) as the centre of gravity for
+  # applying forces. Using an offset from this causes a rotational
+  # effect, according to the mass and force involved.
+  #
+  # In this case, the body is pushed along from the "front" (the
+  # strongly coloured point in the matching model), causing the
+  # "back" to align over time.
+  #
+  # With an offset of v(0.0, 0.0) to apply the force, the body would
+  # continue at its current angle until there was a collision.
+  const offset = v(0.0, 0.5)
+
   all:
     let body = item.physicsBody.body
 

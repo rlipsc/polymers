@@ -237,10 +237,10 @@ template defineRenderCharUpdate*(systemOptions: static[ECSSysOptions]): untyped 
           item.renderChar.moved = false
 
   makeSystemBody("calcDensity"):
-    start:
-      sysRenderChar.maxDensity = 0
-      for i in 0..<sysRenderChar.states.len:
-        sysRenderChar.states[i].count = 0
+    sysRenderChar.maxDensity = 0
+    for i in 0..<sysRenderChar.states.len:
+      sysRenderChar.states[i].count = 0
+
     all:
       # Update density per character
       if item.renderChar.index.validCharIdx:

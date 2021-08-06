@@ -218,10 +218,10 @@ makeSystem("updateDisplay", [QueryResult, DisplayData]):
 
 makeSystem("inputString", [EditString, KeyDown, RenderString]):
   # Turn a RenderString into an edit box.
-  start:
-    let validKeys = 
-      if sys.numbersOnly: Digits
-      else: Letters + Digits
+  let validKeys = 
+    if sys.numbersOnly: Digits
+    else: Letters + Digits
+
   all:
     template xPos: untyped = item.editString.xPos
     template curLen: int = item.renderString.text.len

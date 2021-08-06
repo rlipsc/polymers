@@ -925,256 +925,254 @@ template defineTcpNetworking*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions, 
         sys.name & "()`)"
       item.tcpConnection.ioPort = sys.ioPort
 
-    start:
+    var
+      bytesReceived: DWORD
+      completionKey: ULONG_PTR
+      overlappedAddr: POVERLAPPED
+      processedCompletions: Natural
 
-      var
-        bytesReceived: DWORD
-        completionKey: ULONG_PTR
-        overlappedAddr: POVERLAPPED
-        processedCompletions: Natural
+    # Process completion queue.
 
-      # Process completion queue.
+    while getQueuedCompletionStatus(
+      sys.ioPort.Handle, bytesReceived.addr, completionKey.addr, overlappedAddr.addr, 0).bool:
+      # There is an event to dequeue.
+      let
+        info = cast[ptr OverlappedHeader](overlappedAddr).info
+        key = completionKey.ConnectionType
+        entity = info.entity
+        compRef = info.compRef
+        connection = info.connection.index.TcpConnectionInstance
 
-      while getQueuedCompletionStatus(
-        sys.ioPort.Handle, bytesReceived.addr, completionKey.addr, overlappedAddr.addr, 0).bool:
-        # There is an event to dequeue.
-        let
-          info = cast[ptr OverlappedHeader](overlappedAddr).info
-          key = completionKey.ConnectionType
-          entity = info.entity
-          compRef = info.compRef
-          connection = info.connection.index.TcpConnectionInstance
+        state = info.state
+        statePrefix = case state
+          of csAccept: "<--<=="
+          of csRead: "<====="
+          of csConnecting: "<---->"
+          of csSendInProgress: "=====>"
+          else: "Unknown: " & $state
 
-          state = info.state
-          statePrefix = case state
-            of csAccept: "<--<=="
-            of csRead: "<====="
-            of csConnecting: "<---->"
-            of csSendInProgress: "=====>"
-            else: "Unknown: " & $state
+      assert compRef.valid,
+        "Invalid component reference passed to tcpEvents: " & $compRef & " for " & $state
 
-        assert compRef.valid,
-          "Invalid component reference passed to tcpEvents: " & $compRef & " for " & $state
+      template log(strs: varargs[string, `$`]) =
+        networkLog(defaultWidth,
+          @[statePrefix, entity.entityIdStr, $info.socket] &
+            @["Event: " & strs[0]] & @strs[1..^1])
 
-        template log(strs: varargs[string, `$`]) =
-          networkLog(defaultWidth,
-            @[statePrefix, entity.entityIdStr, $info.socket] &
-              @["Event: " & strs[0]] & @strs[1..^1])
+      assert entity.alive, "The completion for event " & $info.state &
+        " contained a dead entity:\n" & $entity.entityId & "\n"
+      
+      if likely(key == ctTcpOperation):
+        case state
 
-        assert entity.alive, "The completion for event " & $info.state &
-          " contained a dead entity:\n" & $entity.entityId & "\n"
-        
-        if likely(key == ctTcpOperation):
-          case state
+        of csInvalid:
+          log "Invalid state in overlapped. Source entity:\n", entity
+          discard reportError("Invalid state")
 
-          of csInvalid:
-            log "Invalid state in overlapped. Source entity:\n", entity
-            discard reportError("Invalid state")
+        of csAccept:
+          # Complete an incoming connection.
+          log "Accept completed"
+          let
+            olAccept = cast[ptr OverlappedRead](overlappedAddr)
 
-          of csAccept:
-            # Complete an incoming connection.
-            log "Accept completed"
-            let
-              olAccept = cast[ptr OverlappedRead](overlappedAddr)
+            setOptRet = setSockOpt(
+              info.socket,
+              SOL_SOCKET,
+              SO_UPDATE_ACCEPT_CONTEXT,
+              olAccept.listenSocket.addr,
+              sizeof(olAccept.listenSocket).SockLen)
 
-              setOptRet = setSockOpt(
-                info.socket,
-                SOL_SOCKET,
-                SO_UPDATE_ACCEPT_CONTEXT,
-                olAccept.listenSocket.addr,
-                sizeof(olAccept.listenSocket).SockLen)
+          if setOptRet != 0:
+            discard reportError("Completing accept")
 
-            if setOptRet != 0:
-              discard reportError("Completing accept")
+          assert compRef.typeId == TcpListen.typeId, "Unknown type in compRef '" & $compRef & "' when accepting connection"
 
-            assert compRef.typeId == TcpListen.typeId, "Unknown type in compRef '" & $compRef & "' when accepting connection"
+          let
+            receiveLength: DWORD = 0  # Only return address info.
+            localAddressLen = DWORD(sizeof(Sockaddr_storage) + 16)
+            remoteAddressLen = DWORD(sizeof(Sockaddr_in6) + 16)
+          var
+            localLen, remoteLen: int32
+            local, remote: ptr SockAddr
 
-            let
-              receiveLength: DWORD = 0  # Only return address info.
-              localAddressLen = DWORD(sizeof(Sockaddr_storage) + 16)
-              remoteAddressLen = DWORD(sizeof(Sockaddr_in6) + 16)
-            var
-              localLen, remoteLen: int32
-              local, remote: ptr SockAddr
+          getAcceptExSockAddrs(
+            olAccept.addressBuffer[0].addr, receiveLength,
+            localAddressLen, remoteAddressLen,
+            local.addr, localLen.addr,
+            remote.addr, remoteLen.addr
+          )
 
-            getAcceptExSockAddrs(
-              olAccept.addressBuffer[0].addr, receiveLength,
-              localAddressLen, remoteAddressLen,
-              local.addr, localLen.addr,
-              remote.addr, remoteLen.addr
-            )
+          assert info.compRef.typeId == TcpListen.typeId, "Expected a TcpListen to have initiated the accept operation"
+          # Spawns a new connection entity to handle the read.
+          let
+            tcpListen = info.compRef.index.TcpListenInstance
 
-            assert info.compRef.typeId == TcpListen.typeId, "Expected a TcpListen to have initiated the accept operation"
-            # Spawns a new connection entity to handle the read.
-            let
-              tcpListen = info.compRef.index.TcpListenInstance
-
-              # TcpRecv and TcpConnection added together will initiate
-              # a receive operation.
-              channelEnt = newEntityWith(
-                TcpConnection(
-                  socket: olAccept.info.socket,
-                  localPort: tcpListen.port,
-                  localAddress: getAddrString(local),
-                  remoteAddress: getAddrString(remote)
+            # TcpRecv and TcpConnection added together will initiate
+            # a receive operation.
+            channelEnt = newEntityWith(
+              TcpConnection(
+                socket: olAccept.info.socket,
+                localPort: tcpListen.port,
+                localAddress: getAddrString(local),
+                remoteAddress: getAddrString(remote)
+              ),
+              TcpRecv(
+                listenSocket: olAccept.listenSocket,
+                overlappedRead: OverlappedRead(
+                  singleRead: tcpListen.singleRead
+                  )
                 ),
-                TcpRecv(
-                  listenSocket: olAccept.listenSocket,
-                  overlappedRead: OverlappedRead(
-                    singleRead: tcpListen.singleRead
-                    )
-                  ),
-                TcpConnected(),
-                )
-
-            # Add user components for this channel.
-            if tcpListen.onAccept.len > 0:
-              channelEnt.add tcpListen.onAccept
-
-            let con = channelEnt.fetch TcpConnection
-            try:
-              (con.localAddress, con.localPort) =
-                olAccept.info.socket.getLocalAddr(Domain.AF_INET)
-              (con.remoteAddress, con.remotePort) =
-                olAccept.info.socket.getPeerAddr(Domain.AF_INET)
-            except:
-              olAccept.info.socket.close()
-              raise getCurrentException()
-
-            log "Create channel",
-              "Address: " & con.remoteAddress, con.remotePort,
-              channelEnt.entityIdStr
-
-            # Reset socket to request new one.
-            olAccept.info.socket = 0.SocketHandle
-            # Continue to listen.
-            channelEnt.awaitConnection(tcpListen.access)
-
-          of csRead:
-            # Read has completed.
-
-            assert info.compRef.typeId == TcpRecv.typeId,
-              "Expected TcpRead to complete read event but got " & $compRef.typeId
-            let
-              olRead = cast[ptr OverlappedRead](overlappedAddr)
-              tcpRecv = info.compRef.index.TcpRecvInstance
-
-            var totalBytes: DWORD
-            let
-              sizeSuccess {.used.} = getOverlappedResult(
-                olRead.info.socket.Handle,
-                overlappedAddr,
-                totalBytes,
-                false.WINBOOL
+              TcpConnected(),
               )
-              readSocket = olRead.info.socket
-              completed = overlappedAddr.hasOverlappedIoCompleted
+
+          # Add user components for this channel.
+          if tcpListen.onAccept.len > 0:
+            channelEnt.add tcpListen.onAccept
+
+          let con = channelEnt.fetch TcpConnection
+          try:
+            (con.localAddress, con.localPort) =
+              olAccept.info.socket.getLocalAddr(Domain.AF_INET)
+            (con.remoteAddress, con.remotePort) =
+              olAccept.info.socket.getPeerAddr(Domain.AF_INET)
+          except:
+            olAccept.info.socket.close()
+            raise getCurrentException()
+
+          log "Create channel",
+            "Address: " & con.remoteAddress, con.remotePort,
+            channelEnt.entityIdStr
+
+          # Reset socket to request new one.
+          olAccept.info.socket = 0.SocketHandle
+          # Continue to listen.
+          channelEnt.awaitConnection(tcpListen.access)
+
+        of csRead:
+          # Read has completed.
+
+          assert info.compRef.typeId == TcpRecv.typeId,
+            "Expected TcpRead to complete read event but got " & $compRef.typeId
+          let
+            olRead = cast[ptr OverlappedRead](overlappedAddr)
+            tcpRecv = info.compRef.index.TcpRecvInstance
+
+          var totalBytes: DWORD
+          let
+            sizeSuccess {.used.} = getOverlappedResult(
+              olRead.info.socket.Handle,
+              overlappedAddr,
+              totalBytes,
+              false.WINBOOL
+            )
+            readSocket = olRead.info.socket
+            completed = overlappedAddr.hasOverlappedIoCompleted
+          
+          template completeRecv(ol: untyped) =
+            ol.info.state = csInvalid
             
-            template completeRecv(ol: untyped) =
-              ol.info.state = csInvalid
-              
-              if completed or ol.singleRead:
-                entity.add TcpRecvComplete()
-              else:
-                # Restart recv for this socket.
-                # By default sockets are read until a zero length message
-                # is sent.
-                read(connection, tcpRecv)
-
-            if totalBytes == 0:
-              # Empty read signifies graceful connection shutdown.
-              discard reportError("Reading", [ERROR_IO_PENDING])
-              assert completed, "Expected overlapped read to have completed"
-              
-              log "Read completed", $readSocket,
-                "Address: " & connection.remoteAddress,
-                $connection.remotePort,
-                $totalBytes & " bytes (connection closed)"
-
+            if completed or ol.singleRead:
               entity.add TcpRecvComplete()
             else:
-              # Process arrived data.
-              assert connection.valid,
-                "Invalid connection passed to tcpEvents: " & $connection & " for " & $state
-              let incomingData = TcpRecvInstance(compRef.index)
-              # Get local and remote addresses populated by acceptEx.
+              # Restart recv for this socket.
+              # By default sockets are read until a zero length message
+              # is sent.
+              read(connection, tcpRecv)
 
-              log "Data received",
-                "Address: " & connection.remoteAddress,
-                $connection.remotePort,
-                $totalBytes & " bytes "
-              when logging in [tllEventsData, tllEventsLineNo]:
-                log "Message: \"" & ($olRead.recvBuffer.buf) & "\""
-              
-              # Extend buffer and extract data.
-              let
-                curBufLen = incomingData.data.len
-                totalData = curBufLen + totalBytes
-
-              incomingData.data.setLen totalData
-
-              copyMem(
-                incomingData.data[curBufLen].addr,
-                olRead.recvBuffer.buf[0].addr,
-                totalBytes)
-
-              let maxReadLength = tcpRecv.maxReadLength
-
-              if maxReadLength > 0:
-                # There is a known number of bytes expected.
-                if totalData >= maxReadLength:
-                  log "Hit maximum read length", "Max read Length: " & $maxReadLength, "Bytes so far: " & $ totalBytes
-                  # This doesn't use completeRecv as exceeding maxReadLength
-                  # precludes restarting the read process.
-                  olRead.info.state = csInvalid
-                  entity.add TcpRecvComplete()
-                else:
-                  olRead.info.state = csInvalid
-                  read(connection, tcpRecv)
-              else:
-                completeRecv olRead
-  
-          of csConnecting:
-            assert info.compRef.typeId == TcpSend.typeId,
-              "Expected a TcpSend to have initiated connect"
-            assert connection.valid,
-              "Invalid connection passed to tcpEvents: " & $connection & " for " & $state
-
-            log "Connected", "Address: " & $connection.remoteAddress, $connection.remotePort
+          if totalBytes == 0:
+            # Empty read signifies graceful connection shutdown.
+            discard reportError("Reading", [ERROR_IO_PENDING])
+            assert completed, "Expected overlapped read to have completed"
             
-            entity.addIfMissing TcpConnected()
-
-            let tcpSend = info.compRef.index.TcpSendInstance
-            send(connection, tcpSend)
-
-          of csSendInProgress:
-            # A transport has completed a send operation.
-            assert info.compRef.typeId == TcpSend.typeId,
-              "Expected TcpSend to complete send event but got " & $compRef.typeId            
-            let
-              olSend = cast[ptr OverlappedSend](overlappedAddr)
-              sendSocket = info.socket
-
-            olSend.info.state = csInvalid
-
-            log "Send completed", sendSocket,
+            log "Read completed", $readSocket,
               "Address: " & connection.remoteAddress,
               $connection.remotePort,
-              $olSend.bytesSent & " bytes"
+              $totalBytes & " bytes (connection closed)"
+
+            entity.add TcpRecvComplete()
+          else:
+            # Process arrived data.
+            assert connection.valid,
+              "Invalid connection passed to tcpEvents: " & $connection & " for " & $state
+            let incomingData = TcpRecvInstance(compRef.index)
+            # Get local and remote addresses populated by acceptEx.
+
+            log "Data received",
+              "Address: " & connection.remoteAddress,
+              $connection.remotePort,
+              $totalBytes & " bytes "
             when logging in [tllEventsData, tllEventsLineNo]:
-              log "Message sent: \"" & $olSend.sendBuffer.buf.repr & "\""
+              log "Message: \"" & ($olRead.recvBuffer.buf) & "\""
+            
+            # Extend buffer and extract data.
+            let
+              curBufLen = incomingData.data.len
+              totalData = curBufLen + totalBytes
 
-            entity.add TcpSendComplete()
+            incomingData.data.setLen totalData
 
-        processedCompletions += 1
-        if sys.eventLimit > 0 and processedCompletions >= sys.eventLimit:
-          break
-      
-      discard reportError("Poll completion port", [ERROR_IO_PENDING, WAIT_TIMEOUT])
+            copyMem(
+              incomingData.data[curBufLen].addr,
+              olRead.recvBuffer.buf[0].addr,
+              totalBytes)
 
-      when logging in [tllEventsLineNo]:
-        if processedCompletions > 0:
-          networkLog defaultWidth, @["Events processed", $processedCompletions]
+            let maxReadLength = tcpRecv.maxReadLength
+
+            if maxReadLength > 0:
+              # There is a known number of bytes expected.
+              if totalData >= maxReadLength:
+                log "Hit maximum read length", "Max read Length: " & $maxReadLength, "Bytes so far: " & $ totalBytes
+                # This doesn't use completeRecv as exceeding maxReadLength
+                # precludes restarting the read process.
+                olRead.info.state = csInvalid
+                entity.add TcpRecvComplete()
+              else:
+                olRead.info.state = csInvalid
+                read(connection, tcpRecv)
+            else:
+              completeRecv olRead
+
+        of csConnecting:
+          assert info.compRef.typeId == TcpSend.typeId,
+            "Expected a TcpSend to have initiated connect"
+          assert connection.valid,
+            "Invalid connection passed to tcpEvents: " & $connection & " for " & $state
+
+          log "Connected", "Address: " & $connection.remoteAddress, $connection.remotePort
+          
+          entity.addIfMissing TcpConnected()
+
+          let tcpSend = info.compRef.index.TcpSendInstance
+          send(connection, tcpSend)
+
+        of csSendInProgress:
+          # A transport has completed a send operation.
+          assert info.compRef.typeId == TcpSend.typeId,
+            "Expected TcpSend to complete send event but got " & $compRef.typeId            
+          let
+            olSend = cast[ptr OverlappedSend](overlappedAddr)
+            sendSocket = info.socket
+
+          olSend.info.state = csInvalid
+
+          log "Send completed", sendSocket,
+            "Address: " & connection.remoteAddress,
+            $connection.remotePort,
+            $olSend.bytesSent & " bytes"
+          when logging in [tllEventsData, tllEventsLineNo]:
+            log "Message sent: \"" & $olSend.sendBuffer.buf.repr & "\""
+
+          entity.add TcpSendComplete()
+
+      processedCompletions += 1
+      if sys.eventLimit > 0 and processedCompletions >= sys.eventLimit:
+        break
+    
+    discard reportError("Poll completion port", [ERROR_IO_PENDING, WAIT_TIMEOUT])
+
+    when logging in [tllEventsLineNo]:
+      if processedCompletions > 0:
+        networkLog defaultWidth, @["Events processed", $processedCompletions]
 
   proc read*[T: TcpRecv or TcpRecvInstance](connection: var TcpConnection, tcpRecv: var T, okValues: openarray[SomeInteger]) =
     discard beginRecv(tcpRecv.overlappedRead.addr, tcpRecv.bufferSize, okValues)

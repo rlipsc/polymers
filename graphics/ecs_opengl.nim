@@ -43,11 +43,11 @@ macro defineOpenGLUpdateSystems*(sysOpts: ECSSysOptions, positionType: typedesc)
       fields:
         curModelCount {.pub.}: seq[int]
 
-      start:
-        # Reset model counters.
-        sys.curModelCount.setLen modelCount()
-        for i in 0 ..< sys.curModelCount.len:
-          sys.curModelCount[i] = 0
+      # Reset model counters.
+      sys.curModelCount.setLen modelCount()
+      for i in 0 ..< sys.curModelCount.len:
+        sys.curModelCount[i] = 0
+
       all:
         # Populate instance buffers.
         let
@@ -64,10 +64,11 @@ macro defineOpenGLUpdateSystems*(sysOpts: ECSSysOptions, positionType: typedesc)
       # This system populates billboard instances.
       fields:
         billboards {.pub.}: seq[TexBillboard]
-      start:
-        # Reset texture counters.
-        for i in 0 ..< sys.billboards.len:
-          sys.billboards[i].resetItemPos
+
+      # Reset texture counters.
+      for i in 0 ..< sys.billboards.len:
+        sys.billboards[i].resetItemPos
+
       all:
         # Populate instances.
         let

@@ -183,9 +183,9 @@ makeSystemOpts("grab", [Grabbable, CheckRadius], sysOpts):
       entity.removeComponent BlendModel
 
 makeSystemOpts("colourGrabbed", [Grabbed, Model, ColourBlend], sysOpts):
-  start:
-    var timeWiggle = cpuTime() * 5.0
-    timeWiggle = 0.7 + sin(timeWiggle) * 0.2
+  var timeWiggle = cpuTime() * 5.0
+  timeWiggle = 0.7 + sin(timeWiggle) * 0.2
+
   all:
     item.model.col = mix(item.colourBlend.original, item.colourBlend.blendTo, timeWiggle)
 

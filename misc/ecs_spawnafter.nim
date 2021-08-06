@@ -17,8 +17,9 @@ template defineSpawnAfter*(compOpts: ECSCompOptions): untyped {.dirty.} =
 
 template defineSpawnAfterSystem*(sysOpts: ECSSysOptions): untyped {.dirty.} =
   makeSystemOpts("spawnAfter", [SpawnAfter], sysOpts):
-    start:
-      let curTime = epochTime()
+    let
+      curTime = epochTime()
+
     all:
       if curTime - item.spawnAfter.startTime >= item.spawnAfter.duration:
         discard item.spawnAfter.item.construct

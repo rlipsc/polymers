@@ -188,89 +188,88 @@ template defineConsoleEvents*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions):
         mode = ENABLE_WINDOW_INPUT or ENABLE_MOUSE_INPUT 
         doAssert(setConsoleMode(sys.stdInHandle, mode) != 0) 
 
-      start:
-        sys.keyUp.chars.setLen 0
-        sys.keyUp.codes.setLen 0
-        sys.keyUp.keys.setLen 0
-        sys.keyDown.chars.setLen 0
-        sys.keyDown.codes.setLen 0
-        sys.keyDown.keys.setLen 0
-        sys.kEvents.events.setLen 0
-        sys.mEvents.events.setLen 0
-        sys.windowEvent.has = false
-        sys.mouseMoved.has = false
-        sys.mouseClicked.has = false
-        
-        var
-          numRead: int
-          events = getNumberOfConsoleInputEvents(sys.stdInHandle, numRead.addr)
-          inputEvents = newSeq[InputEvent](events)
-          curMousePos: ConsoleCoord
+      sys.keyUp.chars.setLen 0
+      sys.keyUp.codes.setLen 0
+      sys.keyUp.keys.setLen 0
+      sys.keyDown.chars.setLen 0
+      sys.keyDown.codes.setLen 0
+      sys.keyDown.keys.setLen 0
+      sys.kEvents.events.setLen 0
+      sys.mEvents.events.setLen 0
+      sys.windowEvent.has = false
+      sys.mouseMoved.has = false
+      sys.mouseClicked.has = false
+      
+      var
+        numRead: int
+        events = getNumberOfConsoleInputEvents(sys.stdInHandle, numRead.addr)
+        inputEvents = newSeq[InputEvent](events)
+        curMousePos: ConsoleCoord
 
-        if events > 0:
-          doAssert(peekConsoleInput(sys.stdInHandle, inputEvents[0].addr, events, numRead.addr) != 0)
+      if events > 0:
+        doAssert(peekConsoleInput(sys.stdInHandle, inputEvents[0].addr, events, numRead.addr) != 0)
 
-          if numRead > 0:
-            for i, event in inputEvents:
-              case event.eventType
-              of etKey:
-                let newEvent = event.data.keyEvent
+        if numRead > 0:
+          for i, event in inputEvents:
+            case event.eventType
+            of etKey:
+              let newEvent = event.data.keyEvent
 
-                if newEvent.keyDown != 0:
-                  sys.keyDown.chars.add newEvent.uChar
-                  sys.keyDown.codes.add newEvent.virtualScanCode
-                  sys.keyDown.keys.add newEvent.virtualKeyCode
-                else:
-                  sys.keyUp.chars.add newEvent.uChar
-                  sys.keyUp.codes.add newEvent.virtualScanCode
-                  sys.keyUp.keys.add newEvent.virtualKeyCode
-                sys.kEvents.events.add newEvent
+              if newEvent.keyDown != 0:
+                sys.keyDown.chars.add newEvent.uChar
+                sys.keyDown.codes.add newEvent.virtualScanCode
+                sys.keyDown.keys.add newEvent.virtualKeyCode
+              else:
+                sys.keyUp.chars.add newEvent.uChar
+                sys.keyUp.codes.add newEvent.virtualScanCode
+                sys.keyUp.keys.add newEvent.virtualKeyCode
+              sys.kEvents.events.add newEvent
 
-              of etMouse:
-                let mouseEvent = event.data.mouseEvent
-                curMousePos = mouseEvent.mousePosition
+            of etMouse:
+              let mouseEvent = event.data.mouseEvent
+              curMousePos = mouseEvent.mousePosition
 
-                sys.mEvents.events.add mouseEvent
-                if mouseEvent.buttonState != 0:
-                  sys.mouseClicked.has = true
-                  sys.mouseClicked.event.button = mouseEvent.buttonState
+              sys.mEvents.events.add mouseEvent
+              if mouseEvent.buttonState != 0:
+                sys.mouseClicked.has = true
+                sys.mouseClicked.event.button = mouseEvent.buttonState
 
-                if mouseEvent.mousePosition != sys.mouseMoved.event.position:
-                  sys.mouseMoved.has = true
+              if mouseEvent.mousePosition != sys.mouseMoved.event.position:
+                sys.mouseMoved.has = true
 
-              of etWindow:
-                let winEvent = event.data.windowEvent
-                sys.windowEvent = (true, WindowEvent(size: winEvent.size))
+            of etWindow:
+              let winEvent = event.data.windowEvent
+              sys.windowEvent = (true, WindowEvent(size: winEvent.size))
 
-            # Finished with these events.
-            doAssert(sys.stdInHandle.flushConsoleInputBuffer != 0)
-        
-          # To avoid lots of branching within an `all:` loop we use our
-          # separate loops to deposit the events to subscribers of all
-          # events with ConsoleInput.
-          if sys.kEvents.events.len > 0:
-            for i in 0 .. sys.high:
-              sys.groups[i].entity.addOrUpdate sys.kEvents
-          if sys.mEvents.events.len > 0:
-            for i in 0 .. sys.high:
-              sys.groups[i].entity.addOrUpdate sys.mEvents
-          if sys.keyDown.codes.len > 0:
-            for i in 0 .. sys.high:
-              sys.groups[i].entity.addOrUpdate sys.keyDown
-          if sys.keyUp.codes.len > 0:
-            for i in 0 .. sys.high:
-              sys.groups[i].entity.addOrUpdate sys.keyUp
-          if sys.windowEvent.has:
-            for i in 0 .. sys.high:
-              sys.groups[i].entity.addOrUpdate sys.windowEvent.event
-          if sys.mouseMoved.has:
-            sys.mouseMoved.event.lastPosition = sys.mouseMoved.event.position
-            sys.mouseMoved.event.position = curMousePos
-            for i in 0 .. sys.high:
-              sys.groups[i].entity.addOrUpdate sys.mouseMoved.event
-          if sys.mouseClicked.has:
-            for i in 0 .. sys.high:
-              sys.groups[i].entity.addOrUpdate sys.mouseClicked.event
+          # Finished with these events.
+          doAssert(sys.stdInHandle.flushConsoleInputBuffer != 0)
+      
+        # To avoid lots of branching within an `all:` loop we use our
+        # separate loops to deposit the events to subscribers of all
+        # events with ConsoleInput.
+        if sys.kEvents.events.len > 0:
+          for i in 0 .. sys.high:
+            sys.groups[i].entity.addOrUpdate sys.kEvents
+        if sys.mEvents.events.len > 0:
+          for i in 0 .. sys.high:
+            sys.groups[i].entity.addOrUpdate sys.mEvents
+        if sys.keyDown.codes.len > 0:
+          for i in 0 .. sys.high:
+            sys.groups[i].entity.addOrUpdate sys.keyDown
+        if sys.keyUp.codes.len > 0:
+          for i in 0 .. sys.high:
+            sys.groups[i].entity.addOrUpdate sys.keyUp
+        if sys.windowEvent.has:
+          for i in 0 .. sys.high:
+            sys.groups[i].entity.addOrUpdate sys.windowEvent.event
+        if sys.mouseMoved.has:
+          sys.mouseMoved.event.lastPosition = sys.mouseMoved.event.position
+          sys.mouseMoved.event.position = curMousePos
+          for i in 0 .. sys.high:
+            sys.groups[i].entity.addOrUpdate sys.mouseMoved.event
+        if sys.mouseClicked.has:
+          for i in 0 .. sys.high:
+            sys.groups[i].entity.addOrUpdate sys.mouseClicked.event
 
     makeSystemBody("sendKeyInput"):
       start:
@@ -279,13 +278,12 @@ template defineConsoleEvents*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions):
         item.entity.addOrUpdate sysConsoleEvents.kEvents
 
     makeSystemBody("sendKeyChange"):
-      start:
-        if sysConsoleEvents.keyUp.codes.len > 0:
-          for i in 0 .. sys.high:
-            sys.groups[i].entity.addOrUpdate sysConsoleEvents.keyUp
-        if sysConsoleEvents.keyDown.codes.len > 0:
-          for i in 0 .. sys.high:
-            sys.groups[i].entity.addOrUpdate sysConsoleEvents.keyDown
+      if sysConsoleEvents.keyUp.codes.len > 0:
+        for i in 0 .. sys.high:
+          sys.groups[i].entity.addOrUpdate sysConsoleEvents.keyUp
+      if sysConsoleEvents.keyDown.codes.len > 0:
+        for i in 0 .. sys.high:
+          sys.groups[i].entity.addOrUpdate sysConsoleEvents.keyDown
 
     makeSystemBody("sendMouseInput"):
       start:
