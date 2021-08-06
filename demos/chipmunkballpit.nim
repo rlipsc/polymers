@@ -101,7 +101,7 @@ makeSystemOpts("rotate", [PhysicsBody, Rotate], sysOpts):
 
 # The GPU update system should run after any changes to the Position and
 # Model components.
-addOpenGLUpdateSystem(sysOpts, Position)
+defineOpenGLUpdateSystems(sysOpts, Position)
 
 # Build ECS.
 makeEcs(entOpts)
