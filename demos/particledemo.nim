@@ -1,39 +1,36 @@
-
-#[
-  This is a demo of an ECS that models user interactable particles.
-
-  Each foreground particle has two colours, an 'original' and a colour it is mixed
-  toward when the mouse is within its radius. These particles gradually mix back towards their
-  original colour over time, and each particle has a different mix speed.
-  
-  To register when a particle is near the mouse, the CheckRadius component is used.
-  Several systems piggy back on the results stored in this component to perform colouring and
-  movement. This version uses a bool to indicate the source point (mouse) is inside its radius.
-  The same effect can be achieved by adding a separate component when satisfied and write 
-  systems to use that, similar to the grabbing mechanism below.
-
-  Colour blending requires the data from the ColourBlend component, but is only activated
-  when BlendModel is also present. This lets us control whether this work is performed without
-  needed to remove the data that governs it.
-
-  When particles are given the Grabbed component, the BlendModel component is removed to prevent
-  unnecessary work as Grabbed has its own colouring system. There is a performance cost to
-  changing state by adding/removing components too, but this is paid once per change rather than
-  once per tick.
-
-  This demo shows:
-    * Isolated systems focused on single tasks.
-    * Combining multiple behaviours together.
-    * Changing behaviour by adding/removing components.
-    * Adding custom fields to system definitions.
-    * Passing parameters to specific systems by updating system fields.
-    * Manually triggering systems for some effect.
-    * Systems pausing themselves after completion.
-
-  Expects SDL2.dll to be in the current directory, available from here: https://www.libsdl.org/download-2.0.php
-  Uses sdl2 wrapper, obtained with `nimble install sdl2` or from here: https://github.com/nim-lang/sdl2
-  Uses glbits to draw the models, found here: https://github.com/rlipsc/glbits
-]#
+## This is a demo of an ECS that models user interactable particles.
+##
+## Each foreground particle has two colours, an 'original' and a colour it is mixed
+## toward when the mouse is within its radius. These particles gradually mix back towards their
+## original colour over time, and each particle has a different mix speed.
+## 
+## To register when a particle is near the mouse, the CheckRadius component is used.
+## Several systems piggy back on the results stored in this component to perform colouring and
+## movement. This version uses a bool to indicate the source point (mouse) is inside its radius.
+## The same effect can be achieved by adding a separate component when satisfied and write 
+## systems to use that, similar to the grabbing mechanism below.
+##
+## Colour blending requires the data from the ColourBlend component, but is only activated
+## when BlendModel is also present. This lets us control whether this work is performed without
+## needed to remove the data that governs it.
+##
+## When particles are given the Grabbed component, the BlendModel component is removed to prevent
+## unnecessary work as Grabbed has its own colouring system. There is a performance cost to
+## changing state by adding/removing components too, but this is paid once per change rather than
+## once per tick.
+##
+## This demo shows:
+##   * Isolated systems focused on single tasks.
+##   * Combining multiple behaviours together.
+##   * Changing behaviour by adding/removing components.
+##   * Adding custom fields to system definitions.
+##   * Passing parameters to specific systems by updating system fields.
+##   * Manually triggering systems for some effect.
+##   * Systems pausing themselves after completion.
+##
+## Expects SDL2.dll to be in the current directory, available from here: https://www.libsdl.org/download-2.0.php
+## Uses sdl2 wrapper, obtained with `nimble install sdl2` or from here: https://github.com/nim-lang/sdl2
+## Uses glbits to draw the models, found here: https://github.com/rlipsc/glbits
 
 import polymorph, polymers, glbits/modelrenderer, opengl, sdl2, random
 from math import TAU, PI, degToRad, cos, sin, `mod`, sqrt, exp

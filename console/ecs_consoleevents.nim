@@ -1,6 +1,5 @@
-#[
-  Provides components for reading and responding to console events from the keyboard and mouse, and when windows size changes.
-]#
+## Provides components for reading and responding to console events from the keyboard and mouse, and when windows size changes.
+
 
 import polymorph
 

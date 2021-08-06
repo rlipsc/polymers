@@ -1,11 +1,9 @@
-#[
-  This ECS plugin adds the RenderChar component to allow ascii graphics on terminals.
-  The x and y components are translated from -1.0 .. 1.0 to scale between 
-  zero and width/ height.
-
-  Each square keeps track of which render instances invoked its character, and
-  only the first entity to render to a clear cell will be shown.
-]#
+## This ECS plugin adds the RenderChar component to allow ascii graphics on terminals.
+## The x and y components are translated from -1.0 .. 1.0 to scale between 
+## zero and width/ height.
+##
+## Each square keeps track of which render instances invoked its character, and
+## only the first entity to render to a clear cell will be shown.
 
 import polymorph
 

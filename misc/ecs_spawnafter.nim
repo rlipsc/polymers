@@ -1,6 +1,4 @@
-#[
-  Simple ECS plugin for spawning a construction of entities after some delay.
-]#
+## Simple ECS plugin for spawning a construction of entities after some delay.
 
 import polymorph
 
