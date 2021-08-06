@@ -18,9 +18,14 @@ import polymorph, polymers, glbits/modelrenderer, opengl, sdl2, random, math
 
 # Some example parameters:
 #
+# Original: turn=0.296706 (17 degrees)
+#
 # Multi-walled cells: turn=0.135
 # Giant cells: turn=-0.0381 speed=0.045
 # Compartmentalised cells: turn=-0.09899 speed=0.0015
+# Healing gel: turn=0.06883678027639761
+# Pulsing jelly with replicating raisins: turn=-0.2445473010985458
+# More raisins, touch to create: turn=-0.2530594483921344
 
 import strutils, os, strformat
 
@@ -71,12 +76,14 @@ if numParams >= 1:
 
 # The default values mimic the original PPS simulation.
 let
+  turnAmountVariance = 60.0.degToRad  # Range +/- for randomisation.
+
   fixedTurn =
     if params[cmdFixedTurn].given: params[cmdFixedTurn].value
     else: 180.0.degToRad
   turnAmount =
     if params[cmdTurn].given: params[cmdTurn].value
-    else: 17.0.degToRad
+    else: rand -turnAmountVariance .. turnAmountVariance
   clusterSize =
     if params[cmdRadius].given: params[cmdRadius].value
     else: 0.035
@@ -90,11 +97,12 @@ let
     if params[cmdSpeed].given: params[cmdSpeed].value
     else: 0.0047
 
+when defined(debug): echo "Run with -d:danger for a faster framerate."
 echo &"FixedTurn {fixedTurn} ({fixedTurn.radToDeg}°) Turn: {turnAmount} ({turnAmount.radToDeg}°), Turn variance: {turnVariance} Speed: {speed}"
 echo &"Cluster size: {clusterSize}, Cluster variance: {clusterVariance}"
 
 # ----------
-# Set up ECS
+# Define ECS
 # ----------
 
 const
@@ -121,6 +129,32 @@ registerComponents(compOpts):
     Rotate = object
       angle: float32
       rotateSpeed: float32
+
+makeSystemOpts("perturb", [Position], sysOpts):
+  # Moves particles away from sys.position within sys.radius by
+  # sys.force.
+  fields:
+    position: Position
+    radius = 0.12
+    force = 0.01
+
+  init:
+    sys.paused = true
+  
+  let
+    forceRange =
+      if sys.force >= 0: sys.force * 0.1 .. sys.force
+      else: sys.force .. sys.force * 0.1
+
+  for entPos in queryGridPrecise(sys.position.x, sys.position.y, sys.radius):
+    let
+      diffX = entPos.position.x - sys.position.x
+      diffY = entPos.position.y - sys.position.y
+      angle = arcTan2(diffY, diffX)
+      f = rand forceRange
+      dir = vec2(cos(angle) * f, sin(angle) * f)
+    entPos.position.x += dir.x
+    entPos.position.y += dir.y
 
 makeSystemOpts("rotateTowards", [Position, Rotate, Cluster, GridMap, Model], sysOpts):
   all:
@@ -179,25 +213,29 @@ makeSystemOpts("wrapBorders", [Position], sysOpts):
     wrap(x)
     wrap(y)
 
-# --------------
-# Set up systems
-# --------------
+# Fire once systems
 
 makeSystemOpts("setTurnAmount", [Cluster], sysOpts):
   # Changes Cluster then deactivates.
-  fields:
-    turnAmount: float
-  init: sys.paused = true
-  all: item.cluster.turnAmount = sys.turnAmount + rand -turnVariance .. turnVariance
-  finish: sys.paused = true
+  fields: turnAmount: float
+  init:
+    sys.paused = true
+
+  all:
+    item.cluster.turnAmount = sys.turnAmount + rand -turnVariance .. turnVariance
+  
+  sys.paused = true
 
 makeSystemOpts("randomisePositions", [Position], sysOpts):
   # Changes Position then deactivates.
-  init: sys.paused = true
+  init:
+    sys.paused = true
+
   all:
     item.position.x = rand -1.0 .. 1.0
     item.position.y = rand -1.0 .. 1.0
-  finish: sys.paused = true
+  
+  sys.paused = true
 
 # ----
 # Seal
@@ -275,7 +313,9 @@ proc main =
       t1 = cpuTime()
       fc: int
 
-  var keyStates: KeyCodes = getKeyboardState()
+  var
+    keyStates: KeyCodes = getKeyboardState()
+    mousePos: array[2, GLfloat]
 
   # Render loop.
   while running:
@@ -283,15 +323,45 @@ proc main =
       if evt.kind == QuitEvent:
         running = false
         break
+      
       elif evt.kind == WindowEvent:
         var windowEvent = cast[WindowEventPtr](addr(evt))
         if windowEvent.event == WindowEvent_Resized:
           screenWidth = windowEvent.data1
           screenHeight = windowEvent.data2
           glViewport(0, 0, screenWidth, screenHeight)
+      
+      elif evt.kind == MouseMotion:
+        let
+          mm = evMouseMotion(evt)
+          normX = mm.x.float / screenWidth.float
+          normY = 1.0 - (mm.y.float / screenHeight.float)
+        mousePos[0] = (normX * 2.0) - 1.0
+        mousePos[1] = (normY * 2.0) - 1.0
+
+        # Update system with the new mouse position
+        sysPerturb.position.x = mousePos[0]
+        sysPerturb.position.y = mousePos[1]
+      
+      elif evt.kind == MouseButtonDown:
+        var mb = evMouseButton(evt)
+        if mb.button == BUTTON_LEFT:
+          sysPerturb.paused = false
+        elif mb.button == BUTTON_RIGHT:
+          sysPerturb.force = -abs(sysPerturb.force)
+          sysPerturb.paused = false
+
+      elif evt.kind == MouseButtonUp:
+        var mb = evMouseButton(evt)
+        if mb.button == BUTTON_LEFT:
+          sysPerturb.paused = true
+        elif mb.button == BUTTON_RIGHT:
+          sysPerturb.force = abs(sysPerturb.force)
+          sysPerturb.paused = true
+
       elif keyStates.pressed(SDL_SCANCODE_SPACE):
         # Reformat particles to a new turnAround value.
-        let ta = rand -60.0.degToRad..60.0.degToRad
+        let ta = rand -turnAmountVariance .. turnAmountVariance
         sysSetTurnAmount.turnAmount = ta
         sysSetTurnAmount.paused = false
         echo &"Set turn amount to {ta} ({ta.radToDeg:>4.4f}°), variance {turnVariance}"
