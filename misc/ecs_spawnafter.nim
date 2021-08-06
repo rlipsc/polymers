@@ -23,4 +23,4 @@ template defineSpawnAfterSystem*(sysOpts: ECSSysOptions): untyped {.dirty.} =
     all:
       if curTime - item.spawnAfter.startTime >= item.spawnAfter.duration:
         discard item.spawnAfter.item.construct
-        item.entity.removeComponent SpawnAfter
+        entity.remove SpawnAfter
