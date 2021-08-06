@@ -240,8 +240,8 @@ template defineHttp*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions): untyped 
 
   proc fromDs*(req: var HttpRequest, ds: var DataString) =
     ## Populate an HttpHeader with a DataString.
-    var curLine, bodyStart: int
-    
+    var curLine: int
+
     for i, line in ds.lines:
       if curLine == 0:
         let
@@ -256,7 +256,8 @@ template defineHttp*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions): untyped 
         req.httpVersion = strip(line[verPos + 1 .. ^1])
 
       elif line.len == 0:
-        bodyStart = i
+        req.body = ds[i .. ^1]
+        break
       else:
         let sepPos = line.find(':')
 
@@ -269,8 +270,6 @@ template defineHttp*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions): untyped 
         else:
           req.headers[strip(toLowerAscii(line))] = @[""]
       curLine.inc
-      if bodyStart > 0:
-        req.body = ds[bodyStart .. ^1]
 
   proc fromDs*(response: var HttpResponse, ds: var DataString, populateBody = true): Natural {.discardable.} =
     ## Populate an HttpHeader with a DataString.
