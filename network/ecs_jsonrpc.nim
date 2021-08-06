@@ -56,7 +56,7 @@ template defineJsonRpc*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions, loggin
   template appendLog*(entity: EntityRef, msg: string) =
     ## Add or update an RpcLog component with a message.
     when logging:
-      echo "New log message ", msg
+      echo "Log: ", msg
       var log = entity.fetchComponent RpcLog
       let timeStr = getDateStr() & " " & getClockStr()
       if log.valid:
@@ -77,15 +77,14 @@ template defineJsonRpc*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions, loggin
         parsed = true
       except Exception as e:
         appendLog(item.entity,
-          "Cannot process input string: '" &
+          "Cannot process JSON in HTTP body: '" &
           item.httpRequest.body & "' " &
-          "Error: " & e.msg)
-
-      var
-        jsIssues: set[JsonState]
+          "Error: " & e.msg & "\n" &
+          "Headers: " & $item.httpRequest.headers)
 
       if parsed:
         let versionNode = %"2.0"
+        var jsIssues: set[JsonState]
 
         if node.kind != JObject: jsIssues.incl jsNotObject
         if not node.hasKey($rpcMethod): jsIssues.incl jsNoMethod
@@ -107,7 +106,7 @@ template defineJsonRpc*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions, loggin
           
           item.jsonRpcServer.id = id.getStr
 
-          let rpcTask = item.entity.add(
+          discard item.entity.add(
             JsonRpc(
               id: $id,
               name: methodStr.toLowerAscii,
@@ -115,20 +114,28 @@ template defineJsonRpc*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions, loggin
             )
           )
         else:
-          when logging:
-            var reasons: string
-            for item in jsIssues:
-              if reasons.len > 0: reasons &= ", " & $item
-              else: reasons &= $item
+          var reasons: string
+          for item in jsIssues:
+            if reasons.len > 0: reasons &= ", " & $item
+            else: reasons &= $item
 
+          when logging:
             appendLog(item.entity, "Invalid JSON RPC format: " &
               reasons)
-          
-          # This connection is now finished with.
-          sys.deleteList.add item.entity
-          #item.entity.removeComponent TcpRecvComplete
+
+          entity.add JsonRpcResponse(
+            kind: rpcError,
+            code: -32600,
+            message: "Invalid request",
+            data: newJString(reasons)
+          )
       else:
-        echo "Failed to parse: ", item.httpRequest.body
+        entity.add JsonRpcResponse(
+          kind: rpcError,
+          code: -32700,
+          message: "Parse error"
+        )
+
     finish:
       sys.remove HttpRequest
 
@@ -191,7 +198,7 @@ when isMainModule:
     entOpts = dynamicSizeEntities()
     sysOpts = dynamicSizeSystem()
   
-  defineTcpNetworking(compOpts, sysOpts) #, tllEvents)
+  defineTcpNetworking(compOpts, sysOpts, tllEvents)
   defineHttp(compOpts, sysOpts)
   defineJsonRpc(compOpts, sysOpts)
 
@@ -234,7 +241,6 @@ when isMainModule:
         )
       )
     )
-  let x = server.fetch TcpListen
   echo "Listening..."
 
   while entityCount() > 0:
