@@ -57,7 +57,7 @@ template defineUDPNetworking*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions):
       let res = sys.socket.bindSocket(dataAddr, dataAddrLen.SockLen)
       if res == -1:
         quit "Error binding socket"
-      data.freeaddrinfo
+      data.freeAddrInfo
       sys.socket.setBlocking false
 
     start:
@@ -70,16 +70,20 @@ template defineUDPNetworking*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions):
         # Messages outside of buffer size will be discarded.
         bytesRead = sys.socket.recvFrom(buffer, buffer.len.cint,
             0, sockAddr.addr, fromLen.addr)
+
       if bytesRead < 0:
         let err = wsaGetLastError()
         if err != WSAEWOULDBLOCK:
           echo "Network error: ", err
           raiseOSError(osLastError())
+      
       sys.paused = bytesRead <= 0
+
+    let
+      address = sockAddr.addr.getAddrString
     
     all:
       let
-        address = sockAddr.addr.getAddrString
         currentData = entity.fetchComponent UDPIncoming
       if currentData.valid:
         currentData.items.add UDPData(address: address, data: buffer[0 ..< bytesRead])
@@ -116,8 +120,7 @@ when isMainModule:
     compOpts = ECSCompOptions(maxComponents: maxEnts)
     sysOpts = ECSSysOptions(maxEntities: maxEnts)
 
-  import polymers, random, times
-  from winlean import getLastError
+  import random, times
 
   defineUDPNetworking(compOpts, sysOpts)
 
