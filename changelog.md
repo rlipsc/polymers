@@ -6,6 +6,7 @@
   - ecs_tcp: components for sending/receiving data over sockets with windows IOCP.
   - ecs_http: components for using the HTTP protocol with ecs_tcp.
   - ecs_jsonrpc: components for serving remote procedure calls with JSON over ecs_http.
+  - ecs_gridmap: a grid based spatial mapping component.
 
 - Demos
   - chipmunkballpit: uses Chipmunk2D to simulate the physics of 5,000 entities.
