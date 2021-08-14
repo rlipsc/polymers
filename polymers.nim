@@ -1,10 +1,10 @@
-import console/[ecs_renderchar, ecs_consoleevents, ecs_mousebuttons]
-import network/[ecs_udp, ecs_tcp, ecs_http, ecs_jsonrpc]
-import db/[ecs_db, ecs_db_threads]
-import misc/[ecs_killing, ecs_spawnafter]
-import spatial/ecs_gridmap
-import physics/ecs_chipmunk2D
-import graphics/[ecs_opengl]
+import polymers/console/[ecs_renderchar, ecs_consoleevents, ecs_mousebuttons]
+import polymers/network/[ecs_udp, ecs_tcp, ecs_http, ecs_jsonrpc]
+import polymers/db/[ecs_db, ecs_db_threads]
+import polymers/misc/[ecs_killing, ecs_spawnafter]
+import polymers/spatial/ecs_gridmap
+import polymers/physics/ecs_chipmunk2D
+import polymers/graphics/[ecs_opengl]
 
 export
   ecs_renderchar, ecs_consoleevents, ecs_mousebuttons,

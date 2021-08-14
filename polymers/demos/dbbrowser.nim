@@ -240,7 +240,7 @@ makeSystem("inputString", [EditString, KeyDown, RenderString]):
         of 14:
           # Delete
           if xPos >= 0 and curLen > 0:
-            item.renderString.text.delete(xPos, xPos)
+            item.renderString.text.delete(xPos..xPos)
             xPos = max(xPos - 1, 0)
           entity.consumeKey item.keyDown, i
         of 75:

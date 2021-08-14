@@ -7,7 +7,7 @@ const
   sysOpts   = fixedSizeSystem(maxEnts)
 
 # Define networking components.
-defineTCPNetworking(compOpts, sysOpts, tllEvents)
+defineTcpNetworking(compOpts, sysOpts, tllEvents)
 defineHttp(compOpts, sysOpts)
 
 # Web page components.
@@ -21,7 +21,7 @@ makeSystemOpts("serveRoot", [RootPage], sysOpts):
     helloCount: int
   added:
     item.entity.add HttpResponse(
-      code: Http200,
+      status: Http200,
       body: "Hello " & $sys.helloCount
     )
     sys.helloCount += 1
@@ -29,7 +29,7 @@ makeSystemOpts("serveRoot", [RootPage], sysOpts):
 makeSystemOpts("serveTime", [TimePage], sysOpts):
   added:
     item.entity.add HttpResponse(
-      code: Http200,
+      status: Http200,
       body: "The time is " & getClockStr()
     )
 

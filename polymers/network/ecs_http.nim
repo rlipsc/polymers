@@ -14,80 +14,81 @@ template defineHttp*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions): untyped 
   from times import now, format
 
   type
-    HttpRequestMethod* = enum
-      HttpHead = "HEAD"
-      HttpGet = "GET"
-      HttpPos = "POST"
-      HttpPut = "PUT"
-      HttpDelete = "DELETE"
-      HttpTrace = "TRACE"
-      HttpOptions = "OPTIONS"
-      HttpConnect = "CONNECT"
-      HttpPatch = "PATCH"
-
     HttpResponseCode* = enum
-      Http100 = (100, "100 Continue")
-      Http101 = (101, "101 Switching Protocols")
-      Http102 = (102, "102 Processing")
-      Http103 = (103, "103 Early Hints")
-      Http200 = (200, "200 OK")
-      Http201 = (201, "201 Created")
-      Http202 = (202, "202 Accepted")
-      Http203 = (203, "203 Non-Authoritative Information")
-      Http204 = (204, "204 No Content")
-      Http205 = (205, "205 Reset Content")
-      Http206 = (206, "206 Partial Content")
-      Http207 = (207, "207 Multi-Status")
-      Http208 = (208, "208 Already Reported")
-      Http226 = (226, "226 IM Used")
-      Http300 = (300, "300 Multiple Choices")
-      Http301 = (301, "301 Moved Permanently")
-      Http302 = (302, "302 Found")
-      Http303 = (303, "303 See Other")
-      Http304 = (304, "304 Not Modified")
-      Http305 = (305, "305 Use Proxy")
-      Http307 = (307, "307 Temporary Redirect")
-      Http308 = (308, "308 Permanent Redirect")
-      Http400 = (400, "400 Bad Request")
-      Http401 = (401, "401 Unauthorized")
-      Http402 = (402, "402 Payment Required")
-      Http403 = (403, "403 Forbidden")
-      Http404 = (404, "404 Not Found")
-      Http405 = (405, "405 Method Not Allowed")
-      Http406 = (406, "406 Not Acceptable")
-      Http407 = (407, "407 Proxy Authentication Required")
-      Http408 = (408, "408 Request Timeout")
-      Http409 = (409, "409 Conflict")
-      Http410 = (410, "410 Gone")
-      Http411 = (411, "411 Length Required")
-      Http412 = (412, "412 Precondition Failed")
-      Http413 = (413, "413 Request Entity Too Large")
-      Http414 = (414, "414 Request-URI Too Long")
-      Http415 = (415, "415 Unsupported Media Type")
-      Http416 = (416, "416 Requested Range Not Satisfiable")
-      Http417 = (417, "417 Expectation Failed")
-      Http418 = (418, "418 I'm a teapot")
-      Http421 = (421, "421 Misdirected Request")
-      Http422 = (422, "422 Unprocessable Entity")
-      Http423 = (423, "423 Locked")
-      Http424 = (424, "424 Failed Dependency")
-      Http425 = (425, "425 Too Early")
-      Http426 = (426, "426 Upgrade Required")
-      Http428 = (428, "428 Precondition Required")
-      Http429 = (429, "429 Too Many Requests")
-      Http431 = (431, "431 Request Header Fields Too Large")
-      Http451 = (451, "451 Unavailable For Legal Reasons")
-      Http500 = (500, "500 Internal Server Error")
-      Http501 = (501, "501 Not Implemented")
-      Http502 = (502, "502 Bad Gateway")
-      Http503 = (503, "503 Service Unavailable")
-      Http504 = (504, "504 Gateway Timeout")
-      Http505 = (505, "505 HTTP Version Not Supported")
-      Http506 = (506, "506 Variant Also Negotiates")
-      Http507 = (507, "507 Insufficient Storage")
-      Http508 = (508, "508 Loop Detected")
-      Http510 = (510, "510 Not Extended")
-      Http511 = (511, "511 Network Authentication Required")
+      Http100 = "100 Continue",
+      Http101 = "101 Switching Protocols",
+      Http102 = "102 Processing",
+      Http103 = "103 Early Hints",
+      Http200 = "200 OK",
+      Http201 = "201 Created",
+      Http202 = "202 Accepted",
+      Http203 = "203 Non-Authoritative Information",
+      Http204 = "204 No Content",
+      Http205 = "205 Reset Content",
+      Http206 = "206 Partial Content",
+      Http207 = "207 Multi-Status",
+      Http208 = "208 Already Reported",
+      Http226 = "226 IM Used",
+      Http300 = "300 Multiple Choices",
+      Http301 = "301 Moved Permanently",
+      Http302 = "302 Found",
+      Http303 = "303 See Other",
+      Http304 = "304 Not Modified",
+      Http305 = "305 Use Proxy",
+      Http307 = "307 Temporary Redirect",
+      Http308 = "308 Permanent Redirect",
+      Http400 = "400 Bad Request",
+      Http401 = "401 Unauthorized",
+      Http402 = "402 Payment Required",
+      Http403 = "403 Forbidden",
+      Http404 = "404 Not Found",
+      Http405 = "405 Method Not Allowed",
+      Http406 = "406 Not Acceptable",
+      Http407 = "407 Proxy Authentication Required",
+      Http408 = "408 Request Timeout",
+      Http409 = "409 Conflict",
+      Http410 = "410 Gone",
+      Http411 = "411 Length Required",
+      Http412 = "412 Precondition Failed",
+      Http413 = "413 Request Entity Too Large",
+      Http414 = "414 Request-URI Too Long",
+      Http415 = "415 Unsupported Media Type",
+      Http416 = "416 Requested Range Not Satisfiable",
+      Http417 = "417 Expectation Failed",
+      Http418 = "418 I'm a teapot",
+      Http421 = "421 Misdirected Request",
+      Http422 = "422 Unprocessable Entity",
+      Http423 = "423 Locked",
+      Http424 = "424 Failed Dependency",
+      Http425 = "425 Too Early",
+      Http426 = "426 Upgrade Required",
+      Http428 = "428 Precondition Required",
+      Http429 = "429 Too Many Requests",
+      Http431 = "431 Request Header Fields Too Large",
+      Http451 = "451 Unavailable For Legal Reasons",
+      Http500 = "500 Internal Server Error",
+      Http501 = "501 Not Implemented",
+      Http502 = "502 Bad Gateway",
+      Http503 = "503 Service Unavailable",
+      Http504 = "504 Gateway Timeout",
+      Http505 = "505 HTTP Version Not Supported",
+      Http506 = "506 Variant Also Negotiates",
+      Http507 = "507 Insufficient Storage",
+      Http508 = "508 Loop Detected",
+      Http510 = "510 Not Extended",
+      Http511 = "511 Network Authentication Required"
+
+    HttpRequestMethod* = enum
+      HttpUnknown,
+      HttpHead,
+      HttpGet,
+      HttpPost,
+      HttpPut,
+      HttpDelete,
+      HttpTrace,
+      HttpOptions,
+      HttpConnect,
+      HttpPatch
 
     HttpReqHeader* = Table[string, seq[string]]
     HttpResHeader* = Table[string, string]
@@ -100,6 +101,88 @@ template defineHttp*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions): untyped 
     CorsOptions = array[HttpCors, string]
 
     HttpRedirectionState* = enum hrsOkay, hrsErrorCyclic, hrsEmpty
+
+  const
+    unknownHttpStatus = (code: 500, status: Http500)
+
+  func toHttpStatus*(text: string): tuple[code: int, status: HttpResponseCode] =
+    case text
+      of "http100" : (100, Http101)                         
+      of "http101" : (101, Http101)
+      of "http102" : (102, Http102)
+      of "http103" : (103, Http103)
+      of "http200" : (200, Http200)
+      of "http201" : (201, Http201)
+      of "http202" : (202, Http202)
+      of "http203" : (203, Http203)
+      of "http204" : (204, Http204)
+      of "http205" : (205, Http205)
+      of "http206" : (206, Http206)
+      of "http207" : (207, Http207)
+      of "http208" : (208, Http208)
+      of "http226" : (226, Http226)
+      of "http300" : (300, Http300)
+      of "http301" : (301, Http301)
+      of "http302" : (302, Http302)
+      of "http303" : (303, Http303)
+      of "http304" : (304, Http304)
+      of "http305" : (305, Http305)
+      of "http307" : (307, Http307)
+      of "http308" : (308, Http308)
+      of "http400" : (400, Http400)
+      of "http401" : (401, Http401)
+      of "http402" : (402, Http402)
+      of "http403" : (403, Http403)
+      of "http404" : (404, Http404)
+      of "http405" : (405, Http405)
+      of "http406" : (406, Http406)
+      of "http407" : (407, Http407)
+      of "http408" : (408, Http408)
+      of "http409" : (409, Http409)
+      of "http410" : (410, Http410)
+      of "http411" : (411, Http411)
+      of "http412" : (412, Http412)
+      of "http413" : (413, Http413)
+      of "http414" : (414, Http414)
+      of "http415" : (415, Http415)
+      of "http416" : (416, Http416)
+      of "http417" : (417, Http417)
+      of "http418" : (418, Http418)
+      of "http421" : (421, Http421)
+      of "http422" : (422, Http422)
+      of "http423" : (423, Http423)
+      of "http424" : (424, Http424)
+      of "http425" : (425, Http425)
+      of "http426" : (426, Http426)
+      of "http428" : (428, Http428)
+      of "http429" : (429, Http429)
+      of "http431" : (431, Http431)
+      of "http451" : (451, Http451)
+      of "http500" : (500, Http500)
+      of "http501" : (501, Http501)
+      of "http502" : (502, Http502)
+      of "http503" : (503, Http503)
+      of "http504" : (504, Http504)
+      of "http505" : (505, Http505)
+      of "http506" : (506, Http506)
+      of "http507" : (507, Http507)
+      of "http508" : (508, Http508)
+      of "http510" : (510, Http510)
+      of "http511" : (511, Http511)
+      else: unknownHttpStatus
+
+  func toRequestMethod*(value: string): HttpRequestMethod =
+    case value
+      of "HEAD": HttpHead
+      of "GET": HttpGet 
+      of "POST": HttpPost
+      of "PUT": HttpPut
+      of "DELETE": HttpDelete
+      of "TRACE": HttpTrace 
+      of "OPTIONS": HttpOptions
+      of "CONNECT": HttpConnect
+      of "PATCH": HttpPatch
+      else: HttpUnknown
 
   proc initCorsOptions*(allowOrigin, allowMethods, allowHeaders, contentType = ""): CorsOptions =
     [allowOrigin, allowMethods, allowHeaders, contentType]
@@ -117,7 +200,7 @@ template defineHttp*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions): untyped 
       HttpResponse* = object
         httpVersion*: string
         headers*: HttpResHeader
-        code*: HttpResponseCode
+        status*: HttpResponseCode
         body*: string
       HttpRouteEntity* = object
         patterns*: seq[tuple[path: string, onAccept: ComponentList]]
@@ -173,7 +256,7 @@ template defineHttp*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions): untyped 
 
     # Calculate message size to avoid resize allocations.
 
-    msgLen += httpVer.len + len($response.code) + termLen
+    msgLen += httpVer.len + len($response.status) + termLen
     
     for k, v in response.headers.pairs:
       msgLen += k.len + 2 + v.len + termLen
@@ -186,7 +269,7 @@ template defineHttp*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions): untyped 
     # Copy httpResponse data to message buffer.
 
     var p: int
-    p = buf.overwrite(p, httpVer & $response.code & term)
+    p = buf.overwrite(p, httpVer & $response.status & term)
     for k, v in response.headers.pairs:
       p = buf.overwrite(p, k & ": " & v & term)
     p = buf.overwrite(p, term)
@@ -250,7 +333,7 @@ template defineHttp*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions): untyped 
         assert uriPos > -1 and verPos > -1,
           "Expected '<HTTP method> <URL> <HTTP version>' in request type header"
 
-        req.httpMethod = parseEnum[HttpRequestMethod](strip(line[0 ..< uriPos]))
+        req.httpMethod = strip(line[0 ..< uriPos]).toLowerAscii.toRequestMethod
         # URL includes the '/' separator.
         req.url = strip(line[uriPos ..< verPos])
         req.httpVersion = strip(line[verPos + 1 .. ^1])
@@ -292,7 +375,7 @@ template defineHttp*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions): untyped 
         
         assert charPos < line.len, "Unexpected format in HTTP response: '" & line & "'"
         
-        response.code = parseEnum[HttpResponseCode](strip(line[charPos .. ^1]))
+        response.status = strip(line[charPos .. ^1]).toLowerAscii.toHttpStatus.status
 
       elif line.len == 0:
         bodyStart = i
@@ -340,7 +423,7 @@ template defineHttp*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions): untyped 
           #   if value.len > 0:
           #     corsHeader[$access] = value
 
-          let resp = item.entity.add HttpResponse(code: Http204)
+          let resp = item.entity.add HttpResponse(status: Http204)
 
           for access, value in item.processHttp.cors:
             if value.len > 0:
@@ -396,7 +479,7 @@ template defineHttp*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions): untyped 
       # HTTP responses from requests that return a redirection are tagged here.
       # The user may specify components to be added with 'httpRedirection.onRedirect'.
       # The 'HttpRedirection' is always added.
-      if item.httpResponse.code == Http301:
+      if item.httpResponse.status == Http301:
         let location = item.httpResponse.headers.getOrDefault "location"
         var redir = HttpRedirection(url: location)
 
@@ -440,8 +523,18 @@ template defineHttp*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions): untyped 
           item.entity.add item.httpRouteEntity.otherwise
         else:
           item.entity.add HttpResponse(
-            code: Http404
+            status: Http404
           )
       else:
         networkLog ["  >-", entityIdStr(item.entity), "Route accepted", item.httpRequest.url]
 
+when isMainModule:
+  import polymers
+  const
+    compOpts = fixedSizeComponents(100)
+    sysOpts = defaultSysOpts
+  defineTcpNetworking(compOpts, sysOpts)
+  defineHttp(compOpts, sysOpts)
+
+  makeEcs()
+  commitSystems "poll"

@@ -148,7 +148,7 @@ template defineJsonRpc*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions, loggin
       of rpcResult:
         discard entity.add(
           HttpResponse(
-            code: Http200,
+            status: Http200,
             body: $(%*
               {
                 "jsonrpc": "2.0",
@@ -160,7 +160,7 @@ template defineJsonRpc*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions, loggin
       of rpcError:
         discard entity.add(
           HttpResponse(
-            code: Http200,
+            status: Http200,
             body:
               $(%*{
                 "jsonrpc": "2.0",
@@ -224,7 +224,7 @@ when isMainModule:
   
   run()
 
-  let server =
+  let server {.used.} =
     newEntityWith(
       TcpListen(
         port: 8080.Port,

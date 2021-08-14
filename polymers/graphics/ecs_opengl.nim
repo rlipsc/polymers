@@ -136,9 +136,6 @@ when isMainModule:
   # This expects SDL2.dll to be in the current directory,
   # available from here: https://www.libsdl.org/download-2.0.php
 
-  import opengl, sdl2, random, glbits/modelrenderer
-  from math import TAU, PI, degToRad, cos, sin, arctan2, sqrt
-
   when defined(debug):
     const maxEnts = 150_000
   else:
@@ -149,6 +146,9 @@ when isMainModule:
     entOpts = fixedSizeEntities(maxEnts)
 
   defineOpenGlRenders(compOpts, sysOpts)
+
+  import sdl2, random
+  from math import TAU, PI, degToRad, cos, sin, arctan2, sqrt
 
   registerComponents(compOpts):
     type

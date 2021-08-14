@@ -48,7 +48,7 @@ template defineAsk*(compOpts: EcsCompOptions, sysOpts: EcsSysOptions) {.dirty.} 
             # Delete
             if xPos > 0 and curLen > 0:
               xPos = xPos - 1
-              item.renderString.text.delete(xPos, xPos)
+              item.renderString.text.delete(xPos..xPos)
             entity.consumeKey item.keyDown, i
           of 75:
             # Left

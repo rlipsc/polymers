@@ -82,8 +82,6 @@ template defineTcpNetworking*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions, 
   
   import nativesockets, os, winlean, strformat, sequtils
 
-  from os import raiseOSError, osLastError
-  from winlean import recvFrom, wsaGetLastError, AddrInfo, WSAEWOULDBLOCK, INADDR_ANY
   from options import isSome, unsafeGet
   from net import SocketFlag, toOSFlags
   from strutils import align, alignLeft
@@ -1323,7 +1321,7 @@ when isMainModule:
 
   let
     port = 1234.Port
-    server =
+    server {.used.} =
       newEntityWith(
         # This entity is a listen socket for a port.
         # When a connection is accepted, a new entity with TcpConnection

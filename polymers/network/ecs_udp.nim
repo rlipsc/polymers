@@ -68,7 +68,7 @@ template defineUDPNetworking*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions):
 
       var
         # Messages outside of buffer size will be discarded.
-        bytesRead = sys.socket.recvFrom(buffer, buffer.len.cint,
+        bytesRead = sys.socket.recvFrom(buffer.cstring, buffer.len.cint,
             0, sockAddr.addr, fromLen.addr)
 
       if bytesRead < 0:
