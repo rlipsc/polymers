@@ -1,3 +1,14 @@
+# v0.3.1 2021-8-14
+
+## Changed
+
+- Restructure folders for Nimble.
+
+## Fixed
+
+- ecs_http: no longer emits the HoleEnumConv warning.
+- Fewer compiler warning messages.
+
 # v0.3.0 2021-8-7
 
 ## Added

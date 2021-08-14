@@ -1,5 +1,5 @@
 packageName   = "polymers"
-version       = "0.3.0"
+version       = "0.3.1"
 author        = "Ryan Lipscombe"
 description   = "A library of components and systems for the Polymorph ECS"
 license       = "Apache License 2.0"
