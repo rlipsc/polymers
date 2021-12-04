@@ -26,6 +26,7 @@ task test, "Test compiling Polymers":
     exec "nim c --threads:on polymers/demos/dbbrowserthreads.nim"
     exec "nim c polymers/demos/netspeedtest.nim"
     exec "nim c polymers/demos/simplewebsite.nim"
+    exec "nim c polymers/demos/modelsandtextures.nim"
 
   exec "nim c polymers/db/ecs_db.nim"
   exec "nim c polymers/graphics/ecs_opengl.nim"
