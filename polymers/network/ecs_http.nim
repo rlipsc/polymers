@@ -105,6 +105,7 @@ template defineHttp*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions): untyped 
   const
     unknownHttpStatus = (code: 500, status: Http500)
 
+
   func toHttpStatus*(text: string): tuple[code: int, status: HttpResponseCode] =
     case text
       of "http100" : (100, Http101)                         
@@ -171,6 +172,7 @@ template defineHttp*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions): untyped 
       of "http511" : (511, Http511)
       else: unknownHttpStatus
 
+
   func toRequestMethod*(value: string): HttpRequestMethod =
     case value
       of "HEAD": HttpHead
@@ -184,8 +186,10 @@ template defineHttp*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions): untyped 
       of "PATCH": HttpPatch
       else: HttpUnknown
 
+
   proc initCorsOptions*(allowOrigin, allowMethods, allowHeaders, contentType = ""): CorsOptions =
     [allowOrigin, allowMethods, allowHeaders, contentType]
+
 
   registerComponents(compOpts):
     type
@@ -217,10 +221,12 @@ template defineHttp*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions): untyped 
       maxHeaders* = 1024
       maxLineLen* = 1024 * 8
 
+
   func apply(cors: CorsOptions, response: var HttpResHeader) =
     for access, value in cors:
       if value.len > 0 and not(response.hasKey($access)):
         response[$access] = value
+
 
   template optionsSummary(processHttp: ProcessHttp | ProcessHttpInstance): string =
     var res: string
@@ -230,6 +236,7 @@ template defineHttp*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions): untyped 
         if res.len > 0: res &= ", " & itemStr()
         else: res &= itemStr()
     res
+
 
   proc checkMinHeaders*(headers: var HttpResHeader, bodyLen: int) =
     if not headers.hasKey "Date":
@@ -246,6 +253,7 @@ template defineHttp*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions): untyped 
     # if not headers.hasKey "Content-type":
     #   headers["Content-type"] =
     #     "text/plain; charset=utf-8"
+
 
   proc toDS*(response: HttpResponse, buf: var DataString) =
     const
@@ -275,6 +283,7 @@ template defineHttp*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions): untyped 
     p = buf.overwrite(p, term)
     p = buf.overwrite(p, response.body)
     p = buf.overwrite(p, term)
+
 
   proc toDS*(request: HttpRequest, buf: var DataString) =
     const
@@ -321,6 +330,7 @@ template defineHttp*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions): untyped 
     p = buf.overwrite(p, request.body)
     p = buf.overwrite(p, term)
 
+
   proc fromDs*(req: var HttpRequest, ds: var DataString) =
     ## Populate an HttpHeader with a DataString.
     var curLine: int
@@ -353,6 +363,7 @@ template defineHttp*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions): untyped 
         else:
           req.headers[strip(toLowerAscii(line))] = @[""]
       curLine.inc
+
 
   proc fromDs*(response: var HttpResponse, ds: var DataString, populateBody = true): Natural {.discardable.} =
     ## Populate an HttpHeader with a DataString.
@@ -392,6 +403,7 @@ template defineHttp*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions): untyped 
       if populateBody and bodyStart > 0:
         response.body = ds[bodyStart .. ^1]
     bodyStart
+
 
   makeSystemOpts("processHttp", [ProcessHttp, TcpRecv, TcpRecvComplete], sysOpts):
     # This system processes incoming TCP messages to HttpRequest.
@@ -434,8 +446,9 @@ template defineHttp*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions): untyped 
         else:
           item.tcpRecv.data.setLen 0
           item.entity.addComponent request
-    finish:
-      sys.remove TcpRecvComplete
+
+    sys.remove TcpRecvComplete
+
 
   makeSystemOpts("processHttpResponse", [ProcessHttp, TcpConnection, TcpRecv, HttpResponse], sysOpts):
     addedCallback:
@@ -466,12 +479,13 @@ template defineHttp*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions): untyped 
         item.tcpConnection.send(tcpSend, [ERROR_IO_PENDING, WSAECONNRESET])
       else:
         discard item.entity.add TCPSend(data: buf)
-  
+
+
   makeSystemOpts("markSent", [ProcessHttp, HttpResponse, TcpSendComplete], sysOpts):
     all:
-      entity.remove HttpResponse
       entity.addOrUpdate HttpResponseSent()
-      entity.remove TcpSendComplete
+    sys.remove HttpResponse, TcpSendComplete
+
 
   makeSystemOpts("handleRedirects", [HttpRedirecting, HttpRequest, HttpResponse], sysOpts):
     addedCallback:
@@ -508,6 +522,7 @@ template defineHttp*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions): untyped 
         if redir.state == hrsOkay and item.httpRedirecting.onRedirect.len > 0:
           item.entity.addOrUpdate item.httpRedirecting.onRedirect
 
+
   makeSystemOpts("routeEntity", [HttpRequest, HttpRouteEntity], sysOpts):
     addedCallback:
       var found: bool
@@ -527,6 +542,7 @@ template defineHttp*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions): untyped 
           )
       else:
         networkLog ["  >-", entityIdStr(item.entity), "Route accepted", item.httpRequest.url]
+
 
 when isMainModule:
   import polymers
