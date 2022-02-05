@@ -3,8 +3,8 @@
 # available from here: https://www.libsdl.org/download-2.0.php
 # and the Nim SDL2 wrapper: https://github.com/nim-lang/sdl2
 
-import polymorph, polymers, glbits, glbits/modelrenderer, opengl, sdl2
-import random, math, times
+import opengl, sdl2, sdl2/ttf, random, math, times, os
+import polymorph, polymers, glbits, glbits/[modelrenderer, fonts]
 
 randomize()
 
@@ -42,7 +42,7 @@ const
   vTriangle = [vec3(-1.0, -1.0, 0.0), vec3(1.0, 0.0, 0.0), vec3(-1.0, 1.0, 0.0)]
   
   # Shade the vertices so the back end fades out.
-  vCols = [vec4(0.5, 0.5, 0.5, 0.5), vec4(1.0, 1.0, 1.0, 1.0), vec4(0.5, 0.5, 0.5, 0.5)]
+  vCols = [vec4(0.3, 0.3, 0.3, 1.0), vec4(1.0, 1.0, 1.0, 1.0), vec4(0.3, 0.3, 0.3, 1.0)]
 
 proc genModel(triangles: int): tuple[model: seq[GLvectorf3], cols: seq[Glvectorf4]] =
   # Create a model using some randomised triangles and mirror across X-axis.
@@ -80,9 +80,11 @@ proc genModel(triangles: int): tuple[model: seq[GLvectorf3], cols: seq[Glvectorf
 
 let
   shaderProg = newModelRenderer()
-  bulletModel = newModel(shaderProg, vTriangle, vCols)
+  bulletModel = shaderProg.newModel(vTriangle, vCols)
+  circleModel = shaderProg.makeCircleModel(triangles = 8, vec4(1.0), vec4(0.0))
 
 bulletModel.setMaxInstanceCount(200_000)
+circleModel.setMaxInstanceCount(200_000)
 
 var
   shipModels: array[10, ModelId]
@@ -95,7 +97,9 @@ for i in 0 ..< shipModels.len:
 
 # Misc definitions.
 
-type MButtons = tuple[left, right: bool]
+type
+  MButtons = tuple[left, right: bool]
+  DamageKind = enum dkPhysical, dkFire
 
 var
   level = 0
@@ -118,48 +122,84 @@ registerComponents(compOpts):
       x, y: GLfloat
     Bounce = object
       dust: bool
+    Orbit = object
+      x, y: float
+      w, h: float
+      a, s: float
     Weapon = object
       active: bool
       lastFired: float
       fireRate: float
       fireSpeed: float
       bullet: ComponentList
+      special: bool
+      lastSpecialFired: float
+      specialFireRate: float
+
     Health = object
       amount: float
+      full: float
+    Heal = object
+      amount: float
+    Flames = object
     Player = object
-    PlayerDamage = object
-      amount: float
     Enemy = object
-    DamageEnemy = object
+    Damage = object
       amount: float
+      radius: float
+      kind: DamageKind
+    CollisionDamage = object
+      damage: Damage
+    ExplodeOnDeath = object
+      damage: Damage
     Seek = object
       speed: float
-    PlayerKilled = object
-    PlayerKillable = object
-    ExplodeOnDeath = object
     ShrinkAway = object
       startScale: float
+      normTime: float
+      startCol: GLvectorf4
     DeathTimer = object
       start, duration: float
     ReadControls = object
+    Bullet = object
+
+Health.onInit:
+  # Automatically fill to starting amount if not set.
+  if curComponent.full == 0.0:
+    if curComponent.amount > 0:
+      curComponent.full = curComponent.amount
+    else:
+      curComponent.full = 1.0
 
 defineOpenGLComponents(compOpts, Position)
 defineKilling(compOpts)
-defineGridMap(0.08, Position, compOpts, sysOpts)
+defineFontText(compOpts, systems)
+
+# Create grids for broad phase collision detection with 'queryGridPrecise<Name>'.
+defineGridMap(0.08, Position, "PlayerGrid", "Player", compOpts, sysOpts)
+defineGridMap(0.08, Position, "EnemyGrid", "Enemy", compOpts, sysOpts)
 
 func colRange(a, b: SomeFloat): auto = a.float32 .. b.float32
 func colRange(a: SomeFloat): auto = 0.float32 .. a.float32
 
+let
+  font = staticLoadFont(currentSourcePath.splitFile.dir.joinPath r"xirod.ttf")
+
+# Utility functions to be added after makeEcs().
 onEcsBuilt:
-  proc particles(position: GLvectorf2, angle, spread: float, model: ModelInstance, scale: float, particleCount: int,
+
+  proc particles(position: GLvectorf2, angle, spread: float, model: ModelInstance | Model, scale: float, particleCount: int,
       speed: Slice[float], duration = 1.0, col = [colRange(0.8, 1.0), colRange(0.8), colRange(0.0, 0.0)]) =
     
-    # Copy model object so we can edit it.
-    var
-      pModel = model.access
+    when model is ModelInstance:
+      var
+        modelCopy = model.access
+    elif model is Model:
+      var
+        modelCopy = model
     
     # Resize model according to scale.
-    pModel.scale = vec3(pModel.scale[0] * scale)
+    modelCopy.scale = vec3(modelCopy.scale[0] * scale)
 
     for i in 0 .. particleCount:
       let
@@ -169,17 +209,85 @@ onEcsBuilt:
         g = rand col[1]
         b = rand col[2]
         light = 1.0 - abs(fireAngle - angle) / spread
-      pModel.angle = rand TAU
-      pModel.col = vec4(r * light, g * light, b * light, light)
+
+      modelCopy.angle = rand TAU
+      modelCopy.col = vec4(r * light, g * light, b * light, light)
 
       discard newEntityWith(
         Position(x: position[0], y: position[1]),
         Velocity(x: particleSpeed * cos fireAngle, y: particleSpeed * sin fireAngle),
         Bounce(dust: false),
-        pModel,
+        modelCopy,
         KillAfter(duration: duration),
         ShrinkAway()
         )
+
+  proc updatePhysics(bullet: EntityRef, x, y: float, v: GLvectorf2) =
+    let
+      pos = bullet.fetch Position
+      vel = bullet.fetch Velocity
+      model = bullet.fetch Model
+
+    if pos.valid:
+      pos.x = x
+      pos.y = y
+    
+    if vel.valid:
+      vel.x = v.x
+      vel.y = v.y
+
+    if model.valid:
+      model.angle = v.toAngle
+
+  proc applyDamage(entity: EntityRef, damage: Damage | DamageInstance, health: HealthInstance): bool =
+    health.amount -= damage.amount
+
+    case damage.kind
+      of dkPhysical: discard
+      of dkFire: entity.addIfMissing Flames()
+    
+    if health.amount <= 0:
+      true
+    else:
+      false
+
+  proc applyCollision(collider: EntityRef, health: HealthInstance, pos: PositionInstance, vel: VelocityInstance, struck: EntityRef) =
+    ## The collider is applied to all query results even when marked as Killed part way through.
+    
+    if struck != collider and struck.alive:
+      
+      # A collision has occurred.
+      
+      let
+        colDamage = struck.fetch CollisionDamage
+      
+      if colDamage.valid:
+        # Apply the collision damage to the iteration entity.
+
+        let
+          killed = collider.applyDamage(colDamage.damage, health)
+        
+        if not collider.has Bullet:
+          let e = newEntityWith(
+            fontText(
+              font,
+              $colDamage.damage.amount,
+              vec3(pos.x, pos.y, 0.0),
+              vec4(1.0, 0.0, 0.0, 1.0),
+              vec2(0.1)
+            ),
+            ShrinkAway(),
+            KillAfter(duration: 1.0),
+          )
+        
+        if not killed:
+          let
+            struckVel = struck.fetch Velocity
+          
+          if struckVel.valid:
+            if vel.valid:
+              vel.x += struckVel.x
+              vel.y += struckVel.y
 
 makeSystemOpts("movement", [Position, Velocity], sysOpts):
   # This system handles momentum and drag.
@@ -189,13 +297,20 @@ makeSystemOpts("movement", [Position, Velocity], sysOpts):
     item.velocity.x *= 0.99
     item.velocity.y *= 0.99
 
+makeSystemOpts("orbit", [Position, Orbit], sysOpts):
+  # This system handles momentum and drag.
+  all:
+    item.position.x = item.orbit.x + item.orbit.w * cos(item.orbit.a)
+    item.position.y = item.orbit.y + item.orbit.h * sin(item.orbit.a)
+    item.orbit.a = (item.orbit.a + item.orbit.s * dt) mod TAU
+
 makeSystemOpts("seekPlayer", [Seek, Position, Velocity, Model], sysOpts):
   # Move towards player.
   fields:
     player: EntityRef
   start:
     # Don't seek the player when they're dead.
-    if sys.player.has PlayerKilled: sys.paused = true 
+    if sys.player.has Killed: sys.paused = true 
     else: sys.paused = false
 
   let
@@ -213,68 +328,23 @@ makeSystemOpts("seekPlayer", [Seek, Position, Velocity, Model], sysOpts):
     item.velocity.y += desiredVel.y - item.velocity.y
     item.model.angle = angle
 
-template performDamage(damageType: typedesc): untyped =
-  # Both enemies and players use similar code for damage,
-  # only the fetch type for damage differs.
-  # This template uses `entity` and `item` from the calling system.
-  let
-    curX = item.position.x
-    curY = item.position.y
-  var r: bool
-  for entPos in queryGridPrecise(curX, curY, 0.05):
-    let
-      ent = entPos.entity
-    
-    if ent != entity and not(ent.has Killed):
-      # A collision has occurred.
-      let
-        damage = ent.fetch damageType
-      
-      if damage.valid:
-        item.health.amount -= damage.amount
-        
-        if item.health.amount <= 0:
-          r = true
-        else:
-          # If not dead, apply velocity as a push.
-          let
-            bulletVel = ent.fetch Velocity
-          
-          if bulletVel.valid:
-            let entVel = entity.fetch Velocity
-            if entVel.valid:
-              entVel.x += bulletVel.x
-              entVel.y += bulletVel.y
-
-        # Explosion as damaging entity (e.g., bullet) is removed.
-        particles(
-          vec2(curX, curY),
-          0.0,
-          TAU,
-          item.model,
-          0.2,
-          particleCount = 100,
-          speed = 0.2..0.3,
-          col = [colRange(0.8, 1.0), colRange(0.2), colRange(0.0)],
-          duration = 2.0
-        )
-
-        # Kill damaging entity
-        ent.addIfMissing Killed()
-        break
-  r
-
-makeSystemOpts("takeDamageEnemy", [PlayerKillable, Health, GridMap, Position, Model], sysOpts):
+makeSystemOpts("collidePlayer", [Position, Health, PlayerGrid], sysOpts):
   all:
-    if performDamage(DamageEnemy):
-      item.entity.addIfMissing Killed()
+    for colEntPos in queryGridPreciseEnemy(item.position.x, item.position.y, 0.05):
+      entity.applyCollision(item.health, item.position, entity.fetch Velocity, colEntPos.entity)
 
-makeSystemOpts("takeDamagePlayer", [Player, Health, GridMap, Position, Model], sysOpts):
+    if item.health.amount <= 0:
+      entity.addIfMissing Killed()
+
+makeSystemOpts("collideEnemy", [Position, Health, EnemyGrid], sysOpts):
   all:
-    if performDamage(PlayerDamage):
-      item.entity.addIfMissing PlayerKilled()
+    for colEntPos in queryGridPrecisePlayer(item.position.x, item.position.y, 0.05):
+      entity.applyCollision(item.health, item.position, entity.fetch Velocity, colEntPos.entity)
 
-makeSystemOpts("playerKilled", [PlayerKilled, ReadControls, Position, Model], sysOpts):
+    if item.health.amount <= 0:
+      entity.addIfMissing Killed()
+
+makeSystemOpts("playerKilled", [Killed, Player, ReadControls, Position, Model], sysOpts):
   all:
     echo "You died!"
     
@@ -286,16 +356,13 @@ makeSystemOpts("playerKilled", [PlayerKilled, ReadControls, Position, Model], sy
       item.model,
       scale = 0.35,
       particleCount = 5_000,
-      speed = 0.0..1.6,
+      speed = 0.001..1.6,
       duration = 4.5)
-
-    # We don't want to actually delete the player entity,
-    # so we hide the ship by setting the model to transparent.
-    item.model.col[3] = 0.0
 
     entity.addIfMissing DeathTimer(start: cpuTime(), duration: 5.0)
 
   finish:
+    # Disable player input.
     sys.remove ReadControls
 
 makeSystemOpts("controls", [ReadControls, Position, Velocity, Model, Weapon], sysOpts):
@@ -383,26 +450,33 @@ makeSystemOpts("fireWeapon", [Weapon, Position, Model], sysOpts):
 
       let
         bullet = item.weapon.bullet.construct # Build bullet entity.
-        pos = bullet.fetch Position
-        vel = bullet.fetch Velocity
-        model = bullet.fetch Model
         angle = item.model.angle
-
-      if pos.valid:
-        pos.x = item.position.x
-        pos.y = item.position.y
+        bulletSpeed = item.weapon.fireSpeed
       
-      if vel.valid:
+      bullet.updatePhysics(
+        item.position.x,
+        item.position.y,
+        vec2(bulletSpeed * cos(angle), bulletSpeed * sin(angle))
+      )
+
+    if item.weapon.special and curTime - item.weapon.lastSpecialFired >= item.weapon.specialFireRate:
+      # Fire!
+
+      item.weapon.lastSpecialFired = curTime
+
+      for i in 0 .. 100:
         let
+          bullet = item.weapon.bullet.construct
+          angle = rand TAU
           bulletSpeed = item.weapon.fireSpeed
         
-        vel.x = bulletSpeed * cos(angle)
-        vel.y = bulletSpeed * sin(angle)
-      
-      if model.valid:
-        model.angle = angle
+        bullet.updatePhysics(
+          item.position.x,
+          item.position.y,
+          vec2(bulletSpeed * cos(angle), bulletSpeed * sin(angle))
+        )
 
-makeSystemOpts("explosion", [ExplodeOnDeath, Killed, Position, Model], sysOpts):
+makeSystemOpts("explosionFx", [Killed, ExplodeOnDeath, Position, Model], sysOpts):
   # Create some particles using the model that's being killed.
   all:
     particles(
@@ -412,12 +486,91 @@ makeSystemOpts("explosion", [ExplodeOnDeath, Killed, Position, Model], sysOpts):
       item.model,
       scale = 0.5,
       particleCount = 50,
-      speed = 0.2..0.3,
+      speed = 0.02..0.04,
       col = [
         colRange(item.model.col.r),
         colRange(item.model.col.g),
         colRange(item.model.col.b),
         ])
+
+makeSystemOpts("boom", [Killed, ExplodeOnDeath, Position, PlayerGrid], sysOpts):
+  # Cause area of affect damage around the entity.
+  all:
+    let
+      damage = item.explodeOnDeath.damage
+      (x, y) = (item.position.x, item.position.y)
+
+    if damage.amount > 0:
+      for entPos in queryGridPreciseEnemy(x, y, damage.radius):
+        let
+          ent = entPos.entity
+          health = ent.fetch Health
+        
+        if health.valid:
+          if entPos.entity.applyDamage(damage, health):
+            entPos.entity.addIfMissing Killed()
+
+makeSystemOpts("flames", [Flames, Position, Health], sysOpts):
+  all:
+    template doParticles(pc: int, particleSpeed, dur, r, g, b: untyped): untyped =
+      particles(
+        position = vec2(item.position.x, item.position.y),
+        angle = 0.0,
+        spread = TAU,
+        model = Model(modelId: circleModel, scale: vec3(1.0)),
+        scale = 0.02,
+        particleCount = pc,
+        speed = particleSpeed,
+        col = [r,g,b],
+        duration = dur
+      )
+
+    let
+      healthRatio = item.health.amount / item.health.full
+      damage = 1.0 - healthRatio
+      smokeParticles = 1 + int(1.0 * damage)
+      fireParticles = 1 + int(1.0 * damage)
+
+    if healthRatio < 1.0:
+      
+      let
+        baseSize = 0.02
+      
+      doParticles(fireParticles,
+        0.04..0.1,
+        #baseSize + 0.05 * damage .. baseSize + 0.1 * damage,
+        0.5,
+        r = colRange(0.8, 1.0),
+        g = colRange(0.0),
+        b = colRange(0.0))
+
+      doParticles(smokeParticles,
+        0.04..0.8,
+        #baseSize + 0.05 * damage .. baseSize + 0.1 * damage,
+        5.0,
+        r = colRange(0.2, 0.3),
+        g = colRange(0.2, 0.3),
+        b = colRange(0.0))
+      
+    else:
+      # Splash for healed.
+      doParticles(400,
+        0.1..0.12,
+        1.0,
+        r = colRange(0.1),
+        g = colRange(1.0),
+        b = colRange(0.1))
+
+      entity.remove Flames
+
+makeSystemOpts("heal", [Heal, Health], sysOpts):
+  all:
+    if item.health.amount < item.health.full:
+      item.health.amount = clamp(
+        item.health.amount + item.heal.amount * dt,
+        0.0,
+        item.health.full
+      )
 
 makeSystemOpts("wallPhysics", [Position, Velocity, Model, Bounce], sysOpts):
   # This system handles bouncing off edges.
@@ -427,7 +580,7 @@ makeSystemOpts("wallPhysics", [Position, Velocity, Model, Bounce], sysOpts):
       right = vec2(-1.0, 0.0)
       top = vec2(0.0, 1.0)
       bottom = vec2(0.0, -1.0)
-      dustScale = 0.3
+      dustScale = 0.5
       
     let
       curVel = vec2(item.velocity.x, item.velocity.y)
@@ -449,7 +602,7 @@ makeSystemOpts("wallPhysics", [Position, Velocity, Model, Bounce], sysOpts):
             colRange(col[1] * 0.8, col[1]),
             colRange(col[2] * 0.8, col[2])
           ],
-          duration = 2.0
+          duration = 4.0
         )
 
     if item.position.x < -1.0:
@@ -484,22 +637,31 @@ makeSystemOpts("wallPhysics", [Position, Velocity, Model, Bounce], sysOpts):
       item.model.angle = arctan2(r[1], r[0])
       dust(bottom)
 
-makeSystemOpts("shrinkAway", [ShrinkAway, Model, KillAfter], sysOpts):
+makeSystemOpts("shrinkAway", [ShrinkAway, KillAfter], sysOpts):
+  let curTime = cpuTime()
+  
+  all: item.shrinkAway.normTime = 1.0 - ((curTime - item.killAfter.startTime) / item.killAfter.duration)
+
+makeSystemOpts("shrinkAwayModel", [ShrinkAway, Model], sysOpts):
   added:
     item.shrinkAway.startScale = item.model.scale[0]
-  
-  let
-    curTime = cpuTime()
-  
+    item.shrinkAway.startCol = item.model.col
+  all: item.model.scale = vec3(item.shrinkAway.startScale * item.shrinkAway.normTime)
+
+makeSystemOpts("shrinkAwayFont", [ShrinkAway, FontText], sysOpts):
+  added:
+    item.shrinkAway.startScale = item.fontText.scale[0]
+    item.shrinkAway.startCol = item.fontText.col
   all:
-    let normTime = 1.0 - ((curTime - item.killAfter.startTime) / item.killAfter.duration)
-    item.model.scale = vec3(item.shrinkAway.startScale * normTime)
+    item.fontText.scale = vec2(item.shrinkAway.startScale * item.shrinkAway.normTime)
+    item.fontText.col = item.shrinkAway.startCol * item.shrinkAway.normTime
 
 makeSystemOpts("killEnemies", [Enemy], sysOpts):
-  # This system nukes all the enemies, then pauses itself.
+  # This system stores a record of enemy entities and when unpaused will
+  # delete them.
   # Used to reset the game if the player dies.
-  # The sys.count for this system can also be used to track the number
-  # of Enemy entities.
+  # The sys.count for this system is also useful to track the number of
+  # Enemy entities.
   # Note: this is placed after effect systems that use Killed such as
   # "explosion", as we don't want to trigger death effects on enemies
   # when resetting the level.
@@ -509,7 +671,7 @@ makeSystemOpts("killEnemies", [Enemy], sysOpts):
     entity.addIfMissing Killed()
   sys.paused = true
 
-makeSystem("restartGame", [PlayerKilled, DeathTimer, Position, Model, Health]):
+makeSystem("restartGame", [Killed, DeathTimer, Position, Model, Health]):
   all:
     if cpuTime() - item.deathTimer.start > 5.0:
       level = 0
@@ -524,13 +686,23 @@ makeSystem("restartGame", [PlayerKilled, DeathTimer, Position, Model, Health]):
       item.position.y = 0.0
 
       entity.add ReadControls()
-      entity.remove PlayerKilled, DeathTimer
+      entity.remove Killed, DeathTimer
 
-# Delete entities with the `Killed` component.
-defineKillingSystems(sysOpts)
+makeSystemOpts("killAfter", [KillAfter], sysOpts):
+  let
+    curTime = cpuTime()
+
+  all:
+    if curTime - item.killAfter.startTime >= item.killAfter.duration:
+      item.entity.addIfMissing Killed()
+
+makeSystemOpts("deleteKilled", [Killed, not Player], sysOpts):
+  finish: sys.clear
+
 
 # Update GPU for rendering.
 defineOpenGLUpdateSystems(sysOpts, Position)
+defineFontRendering(sysOpts)
 
 # Generate ECS.
 makeEcs(entOpts)
@@ -595,10 +767,6 @@ proc paintBackground(texture: var GLTexture) =
   texture.clearTexture
   texture.paintStars(stars)
 
-  for i in 0 ..< planets:
-    let radius = max(2, rand(w.float * 0.01 .. w.float * 0.25)).int
-    texture.paintPlanet(rand w, rand h, radius)
-
 let backgroundTex = newTextureId(max = 1)
 var backgroundImage: GLTexture
 
@@ -607,7 +775,6 @@ backgroundImage.initTexture(screenWidth, screenHeight)
 backgroundImage.paintBackground
 backgroundTex.update(backgroundImage)
 
-
 # Set up game elements.
 
 proc newPlayer(playerScale: GLvectorf3): EntityRef =
@@ -615,8 +782,15 @@ proc newPlayer(playerScale: GLvectorf3): EntityRef =
     Model(modelId: shipModels[0], scale: playerScale, col: vec4(1.0, 0.0, 0.0, 1.0)),
     Position(),
     Velocity(),
+    Health(amount: 1.0),
+    Heal(amount: 0.01),
+    Player(),
+    PlayerGrid(),
     Bounce(dust: true),
     ReadControls(),
+    CollisionDamage(
+      damage: Damage(amount: 1.0)
+    ),
     Weapon(
       fireRate: 0.2,
       fireSpeed: 1.0 * dt,
@@ -628,16 +802,17 @@ proc newPlayer(playerScale: GLvectorf3): EntityRef =
           scale: vec3(0.02),
           col: vec4(1.0, 1.0, 0.0, 1.0)
         ),
+        PlayerGrid(),
+        Health(amount: 0.00001),
+        CollisionDamage(damage: Damage(amount: 1.0)),
+        Bullet(),
         Bounce(dust: true),
-        DamageEnemy(amount: 1.0),
-        GridMap(),
         KillAfter(duration: 1.0),
-        ExplodeOnDeath()
+        ExplodeOnDeath(
+          damage: Damage(amount: 0.1, kind: dkFire, radius: 0.1)
+        ),
       )
     ),
-    Health(amount: 1.0),
-    Player(),
-    GridMap()
   )
 
 proc createLevel(level: int, playerPos: GLvectorf2, clearArea: float) =
@@ -661,12 +836,12 @@ proc createLevel(level: int, playerPos: GLvectorf2, clearArea: float) =
     if pos.x in px - clearArea .. px + clearArea and
       pos.y in py - clearArea .. py + clearArea:
         if px > -1.0 + clearArea:
-          pos.x = rand -0.99 .. px - clearArea
+          pos.x = rand -0.99 .. max(-0.99, px - clearArea)
         else:
           pos.x = rand px + clearArea .. 0.99
         
         if py > -1.0 + clearArea:
-          pos.y = rand -0.99 .. py + clearArea
+          pos.y = rand -0.99 .. max(-0.99, py + clearArea)
         else:
           pos.y = rand py + clearArea .. 0.99
 
@@ -682,41 +857,59 @@ proc createLevel(level: int, playerPos: GLvectorf2, clearArea: float) =
           angle: rand(TAU),
           col: enemyCol
         ),
-        Bounce(dust: true),
+        EnemyGrid(),
         Enemy(),
+        Bounce(dust: true),
         Health(amount: 1.0 / levelModifier),
-        GridMap(),
-        PlayerDamage(amount: 1.0),
+        CollisionDamage(
+          damage: Damage(amount: 0.1)
+        ),
         Seek(speed: rand 0.01 .. 0.03),
-        PlayerKillable(),
-        ExplodeOnDeath()
+        ExplodeOnDeath(),
       )
 
     if level > 1 and rand(1.0) < 0.1:
+
+      let
+        damageKind =
+          if level > 5 and rand(1.0) > 0.1: dkFire
+        else:
+          dkPhysical
+
       var
+        # Create a bullet template to be spawned by Weapon.
         bullet = cl(
+          Position(),
+          Velocity(),
           Model(
             modelId: bulletModel,
             scale: vec3(0.015),
             col: vec4(0.5, 1.0, 1.0, 1.0)
           ),
-          Position(),
-          Velocity(),
-          Bounce(dust: true),
-          PlayerDamage(amount: 0.1),
-          GridMap(),
-          KillAfter(duration: 1.0),
-          Health(amount: 0.01),
+          EnemyGrid(),
           Enemy(),
-          PlayerKillable()
+          Bullet(),
+          Bounce(dust: true),
+          Health(amount: 0.01),
+          CollisionDamage(damage: Damage(amount: 0.1)),
+          KillAfter(duration: 1.0),
+          ExplodeOnDeath(
+            damage: Damage(
+              amount: 0.1,
+              radius: level.float * 0.01,
+              kind: damageKind
+            )
+          )
         )
       
       if level > 3 and rand(1.0) > level.float / 15.0:
+        # Bullets seek the player at higher levels.
         bullet.add Seek(speed: 0.2)
 
       let
         fRate = rand(1.0 .. 2.0) * levelModifier
       
+      # This enemy fires bullets in its general direction.
       enemy.add Weapon(
         active: true,
         fireRate: fRate,
@@ -747,62 +940,118 @@ let
     )
   )
 
+var
+  planets: Entities
+  planetTex: seq[tuple[tex: GLTexture, id: TextureId]]
+  planetTextures = 5
+  planetRadius = screenWidth
+  middle = screenWidth div 2
+
+planetTex.setLen planetTextures 
+for i in 0 ..< planetTextures:
+  planetTex[i].id = newTextureId(max = 10)
+  planetTex[i].tex.initTexture(planetRadius, planetRadius)
+  planetTex[i].tex.paintPlanet(middle, middle, planetRadius div 2)
+  planetTex[i].id.update(planetTex[i].tex)
+
+proc genPlanets(planets: var Entities, num = 1 .. 3) =
+  planets.deleteAll
+
+  for i in num:
+    let
+      scale = rand 0.1 .. 0.5
+      speed = -0.01 .. 0.01
+    
+    planets.add newEntityWith(
+      Position(),
+      Texture(
+        textureId: planetTex[rand planetTex.high].id,
+        scale: vec2(scale, scale),
+        col: vec4(1.0, 1.0, 1.0, 1.0)
+      ),
+      Orbit(
+        x: rand -0.4..0.4,
+        y: rand -0.4..0.4,
+        w: rand 0.4 .. 0.8,
+        h: rand 0.4 .. 0.8,
+        s: rand speed
+      )
+    )
+
 sysSeekPlayer.player = player
 
-# Game loop.
-while running:
+proc main() =
+  var
+    planets: Entities
+    screenInfo = initScreenInfo(screenWidth, screenHeight)
 
-  # Capture events.
-  while pollEvent(evt):
-    if evt.kind == QuitEvent:
-      running = false
-      break
-    elif evt.kind == WindowEvent:
-      var windowEvent = cast[WindowEventPtr](addr(evt))
-      if windowEvent.event == WindowEvent_Resized:
-        screenWidth = windowEvent.data1
-        screenHeight = windowEvent.data2
-        glViewport(0, 0, screenWidth, screenHeight)
-    elif evt.kind == MouseMotion:
+  planets.genPlanets()
+
+  proc setAspectRatios(extent: array[2, cint]) =
+    screenInfo.setExtent extent
+
+    #setModelAspectRatios(screenInfo.aspect)
+    setTextureAspectRatios(screenInfo.aspect)
+
+  setAspectRatios screenInfo.extent
+
+  # Game loop.
+  while running:
+
+    # Capture events.
+    while pollEvent(evt):
+      if evt.kind == QuitEvent:
+        running = false
+        break
+      elif evt.kind == WindowEvent:
+        var windowEvent = cast[WindowEventPtr](addr(evt))
+        if windowEvent.event == WindowEvent_Resized:
+          setAspectRatios [windowEvent.data1, windowEvent.data2]
+          glViewport(0, 0, screenInfo.extent[0], screenInfo.extent[1])
+      elif evt.kind == MouseMotion:
+        let
+          mm = evMouseMotion(evt)
+        mousePos = screenInfo.normalise [mm.x, mm.y]
+      elif evt.kind == MouseButtonDown:
+        var mb = evMouseButton(evt)
+        if mb.button == BUTTON_LEFT: mouseButtons.left = true
+        if mb.button == BUTTON_RIGHT: mouseButtons.right = true
+      elif evt.kind == MouseButtonUp:
+        var mb = evMouseButton(evt)
+        if mb.button == BUTTON_LEFT: mouseButtons.left = false
+        if mb.button == BUTTON_RIGHT: mouseButtons.right = false
+
+    if sysKillEnemies.count == 0:
+      level += 1
+
+      if level > 1:
+        echo "You have reached level ", level, "!"
+      else:
+        echo "Entering level 1"
+      
       let
-        mm = evMouseMotion(evt)
-        normX = mm.x.float / screenWidth.float
-        normY = 1.0 - (mm.y.float / screenHeight.float)
-      mousePos[0] = (normX * 2.0) - 1.0
-      mousePos[1] = (normY * 2.0) - 1.0
-    elif evt.kind == MouseButtonDown:
-      var mb = evMouseButton(evt)
-      if mb.button == BUTTON_LEFT: mouseButtons.left = true
-      if mb.button == BUTTON_RIGHT: mouseButtons.right = true
-    elif evt.kind == MouseButtonUp:
-      var mb = evMouseButton(evt)
-      if mb.button == BUTTON_LEFT: mouseButtons.left = false
-      if mb.button == BUTTON_RIGHT: mouseButtons.right = false
+        pos = player.fetch Position
+      createLevel(level, vec2(pos.x, pos.y), 0.4)
 
-  if sysKillEnemies.count == 0:
-    level += 1
+      # Update background.
+      backgroundImage.paintBackground()
+      backgroundTex.update(backgroundImage)
+      planets.genPlanets()
 
-    if level > 1:
-      echo "You have reached level ", level, "!"
-    else:
-      echo "Entering level 1"
-    
-    let
-      pos = player.fetch Position
-    createLevel(level, vec2(pos.x, pos.y), 0.4)
+    sysControls.mousePos = mousePos
+    sysControlWeapon.mouseButtons = mouseButtons
 
-    # Update background.
-    backgroundImage.paintBackground()
-    backgroundTex.update(backgroundImage)
 
-  sysControls.mousePos = mousePos
-  sysControlWeapon.mouseButtons = mouseButtons
+    glClear(GL_COLOR_BUFFER_BIT or GL_DEPTH_BUFFER_BIT)
 
-  run()
+    run()
 
-  glClear(GL_COLOR_BUFFER_BIT or GL_DEPTH_BUFFER_BIT)
-  renderActiveTextures()
-  renderActiveModels()
-  
-  # Double buffer.
-  window.glSwapWindow()
+    renderActiveTextures()
+    renderActiveModels()
+    renderFonts()
+
+    # Double buffer.
+    window.glSwapWindow()
+
+main()
+flushGenLog()

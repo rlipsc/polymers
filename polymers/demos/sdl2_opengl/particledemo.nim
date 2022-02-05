@@ -33,7 +33,7 @@
 ## Uses glbits to draw the models, found here: https://github.com/rlipsc/glbits
 
 import polymorph, polymers, glbits/modelrenderer, opengl, sdl2, random
-from math import TAU, PI, degToRad, cos, sin, `mod`, sqrt, exp
+from math import TAU, PI, degToRad, cos, sin, `mod`, sqrt, exp, floor
 from times import cpuTime
 
 when defined(debug):
@@ -43,7 +43,7 @@ when defined(debug):
     particleScale = 0.008
 else:
   const
-    maxEnts = 250_000
+    maxEnts = 400_000
     particleScale = 0.007
 const
   compOpts = fixedSizeComponents(maxEnts)
@@ -100,16 +100,20 @@ makeSystemOpts("spin", [Model, Spin], sysOpts):
     item.model.angle = (item.model.angle + item.spin.access) mod TAU
 
 # Check for entities near the mouse.
+defineGridMap(0.02, Position, compOpts, sysOpts)
+
+makeSystemOpts("resetCR", [CheckRadius], sysOpts):
+  all: item.checkRadius.inside = false
 
 makeSystemOpts("checkRadius", [Position, CheckRadius], sysOpts):
   fields:
     # Add a field for the mouse position to the system type definition.
-    sourcePos: GLvectorf2
+    mousePos: GLvectorf2
   all:
-    # Calculates vector to sourcePos when within checkRadius.radius.
+    # Calculates vector to mousePos when within checkRadius.radius.
     let
-      dx = sys.sourcePos[0] - item.position.x
-      dy = sys.sourcePos[1] - item.position.y
+      dx = sys.mousePos[0] - item.position.x
+      dy = sys.mousePos[1] - item.position.y
       sqDist = dx * dx + dy * dy
       r = item.checkRadius.radius
       sExtent = r * r
@@ -138,7 +142,7 @@ makeSystemOpts("avoidMouse", [CheckRadius, Velocity, AvoidMouse], sysOpts):
 
 # Colour blends.
 
-makeSystemOpts("colourBlend", [BlendModel, ColourBlend, Model], sysOpts):
+makeSystemOpts("colourBlend", [BlendModel, ColourBlend, Model, not Grabbed], sysOpts):
   all:
     # Perform colour calculation.
     template blend: untyped = item.colourBlend
@@ -180,7 +184,6 @@ makeSystemOpts("grab", [Grabbable, CheckRadius], sysOpts):
   all:
     if item.checkRadius.inside:
       entity.addIfMissing Grabbed(force: sys.grabForce, startGrab: cpuTime())
-      entity.removeComponent BlendModel
 
 makeSystemOpts("colourGrabbed", [Grabbed, Model, ColourBlend], sysOpts):
   var timeWiggle = cpuTime() * 5.0
@@ -190,14 +193,14 @@ makeSystemOpts("colourGrabbed", [Grabbed, Model, ColourBlend], sysOpts):
     item.model.col = mix(item.colourBlend.original, item.colourBlend.blendTo, timeWiggle)
 
 makeSystemOpts("gatherGrabbed", [Grabbed, CheckRadius, Position, Velocity], sysOpts):
-  # Moves grabbed entities towards sourcePos.
+  # Moves grabbed entities towards mousePos.
   fields:
-    sourcePos: GLvectorf2
+    mousePos: GLvectorf2
   all:
     let
       force = item.grabbed.force
-      dx = sys.sourcePos[0] - item.position.x
-      dy = sys.sourcePos[1] - item.position.y
+      dx = sys.mousePos[0] - item.position.x
+      dy = sys.mousePos[1] - item.position.y
       sqDist = dx * dx + dy * dy
       length = sqrt(sqDist)
       vector = vec2(dx / length, dy / length)
@@ -266,39 +269,42 @@ attractorModel.setMaxInstanceCount(maxCircles)
 particleModel.setMaxInstanceCount(maxSquares)
 
 # Create some entities to model the particles.
-# Entities encapsulate the parameters for systems.
-for i in 0 ..< maxEnts:
-  let position = Position(x: rand(-1.0..1.0), y: rand(-1.0..1.0), z: 0.0)
-  if rand(1.0) < 0.1:
-    # Background particle.
-    let
-      scale = rand 0.007..0.02
-      speed = rand 0.001..0.008
-      modelCol = vec4(rand 0.01..1.0, rand 0.01..0.5, rand 0.01..1.0, 0.1)
 
-    discard newEntityWith(
-      position,
-      Model(modelId: attractorModel, scale: vec3(scale), angle: rand(TAU), col: modelCol),
-      Velocity(x: rand(-speed..speed), y: rand(-speed..speed)),
-      Spin(rand(-6.0..6.0).degToRad),
-      AttractToMouse(speed: speed * 0.3),
-      CheckRadius(radius: rand 0.2..0.4)
-    )
-  else:
+let
+  foreground = floor(maxEnts * 0.9).int
+
+for i in 0 ..< maxEnts - foreground:
+  
+  # Background particle.
+  let
+    scale = rand 0.007..0.02
+    speed = rand 0.001..0.008
+    modelCol = vec4(rand 0.01..1.0, rand 0.01..0.5, rand 0.01..1.0, 0.1)
+
+  discard newEntityWith(
+    Position(x: rand(-1.0..1.0), y: rand(-1.0..1.0), z: 0.0),
+    Model(modelId: attractorModel, scale: vec3(scale), angle: rand(TAU), col: modelCol),
+    Velocity(x: rand(-speed..speed), y: rand(-speed..speed)),
+    Spin(rand(-6.0..6.0).degToRad),
+    AttractToMouse(speed: speed * 0.3),
+    CheckRadius(radius: rand 0.2..0.4),
+  )
+
+for i in 0 ..< foreground:
     # Foreground particle.
     let
-      speed = rand 0.002..0.015
+      speed = rand 0.003..0.008
       reactCol = vec4(rand 0.1..1.0, rand 0.1..1.0, rand 0.1..1.0, 1.0)
       modelCol = vec4(rand 0.1..1.0, 0.0, 0.0, 0.8)
     discard newEntityWith(
-      position,
+      Position(x: rand(-1.0..1.0), y: rand(-1.0..1.0), z: 0.0),
       Model(modelId: particleModel, scale: vec3(particleScale), angle: rand(TAU), col: modelCol),
       Velocity(x: rand(-speed..speed), y: rand(-speed..speed)),
       AvoidMouse(speed: speed),
       CheckRadius(radius: rand 0.3..0.4),
       ColourBlend(original: modelCol, blendTo: reactCol, mixSpeed: rand 0.1 .. 0.2, brightening: rand 1.5 .. 5.0),
       BlendModel(),
-      Grabbable()
+      Grabbable(),
     )
     
 var mousePos: GLvectorf2
@@ -331,8 +337,8 @@ proc main =
         mousePos[0] = (normX * 2.0) - 1.0
         mousePos[1] = (normY * 2.0) - 1.0
         # Update system with the new mouse position
-        sysCheckRadius.sourcePos = mousePos
-        sysGatherGrabbed.sourcePos = mousePos
+        sysCheckRadius.mousePos = mousePos
+        sysGatherGrabbed.mousePos = mousePos
 
       # Handle grabbing.  
       if evt.kind == MouseButtonDown:

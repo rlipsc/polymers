@@ -2,7 +2,7 @@ import polymorph, polymers, times
 
 const
   maxEnts   = 10_000  # Effectively the maximum concurrent sockets.
-  entOpts   = fixedSizeEntities(maxEnts)
+  entOpts   = dynamicSizeEntities()
   compOpts  = fixedSizeComponents(maxEnts)
   sysOpts   = fixedSizeSystem(maxEnts)
 
@@ -35,7 +35,11 @@ makeSystemOpts("serveTime", [TimePage], sysOpts):
 
 makeSystemOpts("finishServePage", [HttpResponseSent], sysOpts):
   # Clean up after a response.
-  added: sys.deleteList.add item.entity
+  added:
+    sys.deleteList.add item.entity
+    echo "\n"
+
+echo " "
 
 makeEcs(entOpts)
 commitSystems("poll")
