@@ -67,6 +67,8 @@ template defineGridMap*(gridRes: static[float], positionType: typedesc, gridComp
     let
       posIdent = ident ($positionType).toLowerAscii
       posIdentInst = ident $positionType & "Instance"
+      dist = ident "dist"
+      entity = ident "entity"
       gridComp = ident gridCompName
       lcGridComp = gridCompName.toLowerAscii
       gridCompIdent = ident lcGridComp
@@ -169,7 +171,7 @@ template defineGridMap*(gridRes: static[float], positionType: typedesc, gridComp
                 for entity in `gridMapSysIdent`.grid[index]:
                   yield entity
 
-        iterator `queryGridPrecise`*(`x`, `y`, `r`: SomeFloat): tuple[entity: EntityRef, position: `posIdentInst`, dist: float] =
+        iterator `queryGridPrecise`*(`x`, `y`, `r`: SomeFloat): tuple[`entity`: EntityRef, `posIdent`: `posIdentInst`, `dist`: float] =
           ## Queries the grid for entities.
           ## This is accurate to exactly `radius`.
           let sRadius = `r` * `r`
