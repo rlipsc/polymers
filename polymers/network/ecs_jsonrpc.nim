@@ -183,8 +183,6 @@ template defineJsonRpc*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions, loggin
 
   makeSystemOpts("completeJsonRpcSend", [JsonRpcTransit, HttpResponseSent], sysOpts):
     addedCallback:
-      let entity = item.entity
-      entity.remove JsonRpcTransit, HttpResponseSent
       sys.deleteList.add entity
 
 template defineJsonRpc*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions) {.dirty.} =
