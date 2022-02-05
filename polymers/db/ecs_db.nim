@@ -37,7 +37,7 @@ template defineDatabaseComponents*(compOpts: ECSCompOptions, sysOpts: ECSSysOpti
     if curComponent.query != nil:
       curComponent.query.freeQuery()
 
-template defineDatabaseSystems*(sysOpts: EcsSysOptions): untyped =
+template defineDatabaseSystems*(sysOpts: EcsSysOptions): untyped {.dirty.} =
   ## Perform the database queries.
 
   makeSystemOpts("connectToDb", [ConnectToDb], sysOpts):
