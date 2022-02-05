@@ -435,7 +435,7 @@ template defineHttp*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions): untyped 
           #   if value.len > 0:
           #     corsHeader[$access] = value
 
-          let resp = item.entity.add HttpResponse(status: Http204)
+          let resp = entity.add HttpResponse(status: Http204)
 
           for access, value in item.processHttp.cors:
             if value.len > 0:
@@ -445,7 +445,7 @@ template defineHttp*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions): untyped 
           item.tcpRecv.data.setLen 0
         else:
           item.tcpRecv.data.setLen 0
-          item.entity.addComponent request
+          entity.addComponent request
 
     sys.remove TcpRecvComplete
 
