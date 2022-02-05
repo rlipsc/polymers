@@ -55,8 +55,8 @@ template defineMouseButtons*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions) {
     DrawMouse.onRemoveCallback:
       curComponent.charEnt.delete
     MouseButton.onRemoveCallback:
-      for item in curComponent.characters:
-        item.entity.delete
+      for c in curComponent.characters:
+        c.entity.delete
 
   makeSystemOpts("initButtonState", [MouseButton], sysOpts):
     all:
@@ -133,7 +133,7 @@ template defineMouseButtons*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions) {
       # Handle resizing.
       if expectedLen < chars.len:
         for i in expectedLen ..< chars.len:
-          chars[i].entity.delete
+          sys.deleteList.add chars[i].entity
         chars.setLen expectedLen
 
       elif expectedLen > chars.len:

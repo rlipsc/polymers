@@ -105,13 +105,16 @@ template defineConsoleEvents*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions):
         size*: ConsoleCoord
 
 
-  proc consumeKey*(entity: EntityRef, keyComp: KeyDownInstance | KeyUpInstance, i: int) =
-    ## Remove a key, if no keys remove the component.
+  proc consumeKey*(keyComp: KeyDownInstance | KeyUpInstance, i: int): bool =
+    ## Remove a key, if no keys left, returns true, indicating the component can be removed.
+    ## Otherwise returns false.
     keyComp.codes.del i
     keyComp.chars.del i
     keyComp.access.keys.del i
     if keyComp.codes.len == 0:
-      entity.removeComponent keyComp.access.type
+      true
+    else:
+      false
 
   template processKeys*(keyComponent: KeyDownInstance | KeyUpInstance, actions: untyped): untyped =
     ## Iterate keys allowing for length changes by consume.

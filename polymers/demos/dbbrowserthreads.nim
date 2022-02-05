@@ -101,7 +101,7 @@ template newEntry(textStr: string, coord: tuple[x, y: float]): tuple[ent: Entity
 
 template clear(list: DisplayRow): untyped =
   for pair in list:
-    pair.ent.delete
+    sys.deleteList.add pair.ent
   list.setLen 0
 
 template clear(displayData: DisplayDataInstance): untyped =
@@ -232,6 +232,7 @@ makeSystem("inputString", [EditString, KeyDown, RenderString]):
   all:
     template xPos: untyped = item.editString.xPos
     template curLen: int = item.renderString.text.len
+    var removeKeyDown: bool
 
     for i in countDown(item.keyDown.codes.high, 0):
       let aChar = chr(item.keyDown.chars[i])
@@ -241,7 +242,7 @@ makeSystem("inputString", [EditString, KeyDown, RenderString]):
         else:
           item.renderString.text &= aChar
         xPos = min(xPos + 1, curLen - 1)
-        entity.consume item.keyDown, i
+        removeKeyDown = consume(item.keyDown, i)
       else:
         case item.keyDown.codes[i]
         of 14:
@@ -249,27 +250,29 @@ makeSystem("inputString", [EditString, KeyDown, RenderString]):
           if xPos >= 0 and curLen > 0:
             item.renderString.text.delete(xPos..xPos)
             xPos = max(xPos - 1, 0)
-          entity.consume item.keyDown, i
+          removeKeyDown = consume(item.keyDown, i)
         of 75:
           xPos = max(xPos - 1, 0)
-          entity.consume item.keyDown, i
+          removeKeyDown = consume(item.keyDown, i)
         of 77:
           xPos = min(curLen - 1, xPos + 1)
-          entity.consume item.keyDown, i
+          removeKeyDown = consume(item.keyDown, i)
         of 28:
           # Return
           entity.addOrUpdate InputFinished()
-          entity.consume item.keyDown, i
+          removeKeyDown = consume(item.keyDown, i)
         else:
           discard
 
-proc consume(entity: EntityRef, keyComp: KeyDownInstance | KeyUpInstance, i: int) =
+proc consume(keyComp: KeyDownInstance | KeyUpInstance, i: int): bool =
   ## Remove a key, if empty remove component
   keyComp.codes.del i
   keyComp.chars.del i
   keyComp.access.keys.del i
   if keyComp.codes.len == 0:
-    entity.removeComponent keyComp.access.type
+    true
+  else:
+    false
 
 template processKeys(keyComponent: KeyDownInstance | KeyUpInstance, actions: untyped): untyped =
   ## Iterate keys allowing for length changes by consume.
@@ -286,11 +289,13 @@ makeSystem("escape", [EditString, KeyDown]):
     item.keyDown.processKeys:
       if code == 1:
         sys.escapePressed = true
-        entity.consume item.keyDown, keyIndex
+        if consume(item.keyDown, keyIndex):
+          entity.remove KeyDown
         break
 
 makeSystem("controlTables", [Tables, DisplayData, KeyDown, LineCursor]):
   all:
+    var removeKeyDown, removeTables: bool
     item.keyDown.processKeys:
       case code
       of 1:
@@ -303,9 +308,9 @@ makeSystem("controlTables", [Tables, DisplayData, KeyDown, LineCursor]):
           tableName = item.displayData.rows[lineNo][0].rs.text
 
         item.displayData.updated = false
-        entity.consume(item.keyDown, keyIndex)
-        entity.removeComponent Tables
-        entity.addComponent FetchTableData(table: tableName)
+        removeKeyDown = consume(item.keyDown, keyIndex)
+        removeTables = true
+        entity.add FetchTableData(table: tableName)
       of 33:
         # F
         let
@@ -314,10 +319,15 @@ makeSystem("controlTables", [Tables, DisplayData, KeyDown, LineCursor]):
 
         item.displayData.updated = false
         item.displayData.clear
-        entity.consume(item.keyDown, keyIndex)
-        entity.removeComponent Tables
-        entity.addComponent FetchTableFields(table: tableName)
+        removeKeyDown = consume(item.keyDown, keyIndex)
+        entity.add FetchTableFields(table: tableName)
+        removeTables = true
       else: discard
+    if removeKeyDown:
+      entity.remove KeyDown
+    if removeTables:
+      entity.remove Tables
+
 
 makeSystem("controlTableData", [TableData, DisplayData, KeyDown, LineCursor]):
   all:
@@ -329,9 +339,10 @@ makeSystem("controlTableData", [TableData, DisplayData, KeyDown, LineCursor]):
         item.displayData.clear
         item.lineCursor.line = 0
         item.lineCursor.lastLine = -1
-        entity.consume item.keyDown, keyIndex
-        entity.removeComponent TableData
-        entity.addComponent FetchTables()
+        if consume(item.keyDown, keyIndex):
+          entity.remove KeyDown
+        entity.remove TableData
+        entity.add FetchTables()
       else: discard
 
 makeSystem("controlTableFields", [TableFields, DisplayData, KeyDown, LineCursor]):
@@ -344,7 +355,8 @@ makeSystem("controlTableFields", [TableFields, DisplayData, KeyDown, LineCursor]
         item.displayData.clear
         item.lineCursor.line = 0
         item.lineCursor.lastLine = -1
-        entity.consume item.keyDown, keyIndex
+        if consume(item.keyDown, keyIndex):
+          entity.remove KeyDown
         entity.removeComponent TableFields
         entity.addComponent FetchTables()
       else: discard
@@ -352,15 +364,18 @@ makeSystem("controlTableFields", [TableFields, DisplayData, KeyDown, LineCursor]
 makeSystem("lineCursorNav", [LineCursor, KeyDown]):
   all:
     let lc = item.lineCursor
+    var removeKeyDown: bool
     for i in countDown(item.keyDown.codes.high, 0):
       case item.keyDown.codes[i]
       of 72:
         lc.line -= 1
-        entity.consume(item.keyDown, i)
+        removeKeyDown = consume(item.keyDown, i)
       of 80:
         lc.line += 1
-        entity.consume(item.keyDown, i)
+        removeKeyDown = consume(item.keyDown, i)
       else: discard
+    if removeKeyDown:
+      entity.remove KeyDown
 
 makeSystem("dispLineCursor", [LineCursor, DisplayData]):
   all:

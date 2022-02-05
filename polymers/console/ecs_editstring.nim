@@ -27,6 +27,8 @@ template defineAsk*(compOpts: EcsCompOptions, sysOpts: EcsSysOptions) {.dirty.} 
       template xPos: untyped = item.editString.xPos
       template curLen: int = item.renderString.text.len
 
+      var removeKeyDown: bool
+
       for i in countDown(item.keyDown.codes.high, 0):
 
         let aChar = chr(item.keyDown.chars[i])
@@ -39,7 +41,7 @@ template defineAsk*(compOpts: EcsCompOptions, sysOpts: EcsSysOptions) {.dirty.} 
             item.renderString.text &= aChar
 
           xPos = min(xPos + 1, curLen)
-          entity.consumeKey item.keyDown, i
+          removeKeyDown = consumeKey(item.keyDown, i)
 
         else:
 
@@ -49,29 +51,31 @@ template defineAsk*(compOpts: EcsCompOptions, sysOpts: EcsSysOptions) {.dirty.} 
             if xPos > 0 and curLen > 0:
               xPos = xPos - 1
               item.renderString.text.delete(xPos..xPos)
-            entity.consumeKey item.keyDown, i
+            removeKeyDown = consumeKey(item.keyDown, i)
           of 75:
             # Left
             xPos = max(xPos - 1, 0)
-            entity.consumeKey item.keyDown, i
+            removeKeyDown = consumeKey(item.keyDown, i)
           of 77:
             # Right
             xPos = min(xPos + 1, curLen)
-            entity.consumeKey item.keyDown, i
+            removeKeyDown = consumeKey(item.keyDown, i)
           of 28:
             # Return
             entity.addOrUpdate InputFinished()
-            entity.consumeKey item.keyDown, i
+            removeKeyDown = consumeKey(item.keyDown, i)
           of 71:
             # Home
             xPos = 0
-            entity.consumeKey item.keyDown, i
+            removeKeyDown = consumeKey(item.keyDown, i)
           of 79:
             # End
             xPos = curLen
-            entity.consumeKey item.keyDown, i
+            removeKeyDown = consumeKey(item.keyDown, i)
           else:
             discard
+      if removeKeyDown:
+        entity.remove KeyDown
 
   makeSystem("updateCursorPos", [EditString, RenderString]):
     all:
@@ -84,7 +88,8 @@ template defineAsk*(compOpts: EcsCompOptions, sysOpts: EcsSysOptions) {.dirty.} 
       item.keyDown.processKeys:
         if code == 1:
           sys.escapePressed = true
-          entity.consumeKey item.keyDown, keyIndex
+          if consumeKey(item.keyDown, keyIndex):
+            entity.remove KeyDown
           break
 
   onEcsBuilt:

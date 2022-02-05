@@ -108,9 +108,10 @@ template defineUDPNetworking*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions):
           toAddress.ai_addr, toAddress.ai_addrLen.SockLen)
 
         toAddress.freeAddrInfo
-        entity.removeComponent UDPSend
       except:
         item.udpSend.failed = true
+      if not item.udpSend.failed:
+        entity.remove UDPSend
 
 when isMainModule:
   const
