@@ -907,7 +907,7 @@ template defineTcpNetworking*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions, 
   # -------
 
 
-  makeSystem("tcpEvents", [TcpConnection]):
+  makeSystem "tcpEvents", [TcpConnection]:
     #
     # This system polls available completions and acts on the state info.
     #
@@ -915,7 +915,6 @@ template defineTcpNetworking*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions, 
       sys.initIoPort
     
     added:
-
       # Assign the system's completion port to this component for later reference.
       assert sys.ioPort.int != 0,
         "System completion port is not yet initialised, run this " &
@@ -944,9 +943,9 @@ template defineTcpNetworking*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions, 
         state = info.state
         statePrefix = case state
           of csAccept: "<--<=="
-          of csRead: "<====="
+          of csRead: "<===--"
           of csConnecting: "<---->"
-          of csSendInProgress: "=====>"
+          of csSendInProgress: "--===>"
           else: "Unknown: " & $state
 
       assert compRef.valid,
@@ -1293,7 +1292,7 @@ when isMainModule:
 
   makeSystem("clientReply", [Client, TcpConnection, TcpSend, TcpRecv, TcpRecvComplete]):
     all:
-      # We're received a reply to our message. Send another response.
+      # We've received a reply to our message. Send another response.
       echo "Client received reply: ", item.tcpRecv.data
       item.client.replies += 1
       if item.client.replies <= item.client.replyCount:
@@ -1366,4 +1365,4 @@ when isMainModule:
     if log.len > 0:
       echo log
 
-flushgenlog()
+  flushGenlog()
