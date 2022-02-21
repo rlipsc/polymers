@@ -56,6 +56,10 @@ Many component modules include a demonstration of how they can be used when run 
 
 The graphics demos use SDL2 to set up the rendering window.
 
+- `modelsandtextures`: uses the OpenGL components to render a million particles that react to the mouse.
+
+https://user-images.githubusercontent.com/36367371/155025607-7dfd735b-be17-4b4c-8a4e-592de6037289.mp4
+
 - `dbbrowser` (and `dbbrowserthreads`): uses the console and database components to create a command line database table browser.
 
 - `consolemousebuttons`: uses the console components to create a text based button UI that can be interacted with using the mouse.
@@ -70,10 +74,6 @@ The graphics demos use SDL2 to set up the rendering window.
 
 https://user-images.githubusercontent.com/36367371/128614604-3d3c4e2e-97a4-4c29-98e9-7554a68a20f8.mp4
 
-- `particledemo`: uses the OpenGL components to render a few hundred thousand particles that react to the mouse.
-
-https://user-images.githubusercontent.com/36367371/128614599-69fd1c94-afaa-4211-92dc-f0a6845ee341.mp4
-
 - `particlelife`: an implementation of the "Primordial Particle System" described [here](https://www.nature.com/articles/srep37969)
 
 https://user-images.githubusercontent.com/36367371/124841111-6d751980-df84-11eb-85c0-90280f2dca1f.mp4
@@ -81,10 +81,6 @@ https://user-images.githubusercontent.com/36367371/124841111-6d751980-df84-11eb-
 - `chipmunkballpit`: uses the Chipmunk2D and OpenGL components to simulate balls in a box. Use the mouse to move them about.
 
 https://user-images.githubusercontent.com/36367371/124198657-04475f00-dac9-11eb-9000-fda888b270ff.mp4
-
-- `modelsandtexturesdemo`: creates 400,000 entities to interact with the mouse, rendered as models or textures.
-
-https://user-images.githubusercontent.com/36367371/124194457-88e1af80-dac0-11eb-8077-16477add4eae.mp4
 
 # Included Components
 
