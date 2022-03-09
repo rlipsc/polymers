@@ -203,7 +203,7 @@ func colRange(a: SomeFloat): auto = 0.float32 .. a.float32
 func colRanges(v: GLvectorf4): auto = [v.r.colRange, v.g.colRange, v.b.colRange]
 
 let
-  font = staticLoadFont(currentSourcePath.splitFile.dir.joinPath r"xirod.ttf")
+  font = staticLoadFont(currentSourcePath.splitFile.dir.joinPath r"Orbitron Bold.ttf")
   particleZ = -0.5
   fontZ = -0.6
 
@@ -268,7 +268,7 @@ onEcsBuilt:
     if model.valid:
       model.angle = v.toAngle
 
-  proc applyScore(ent, target: EntityRef) =
+  proc applyScore(target, ent: EntityRef) =
     # Applies a score in 'target' to 'ent'.
     const defaultKillScore = 1
     let childOf = ent.fetch ChildOf
@@ -352,7 +352,6 @@ onEcsBuilt:
     # This is a template so we get static checking.
     # It's dirty so we don't mangle symbol names and the '&' formatting macro works.
     if struck != collider and struck.alive:
-      
       let
         colDamage = collider.fetch CollisionDamage
       
@@ -1226,11 +1225,11 @@ proc main() =
     bg.fetch(Texture).scale[0] = sdlDisplay.aspect
 
   let
-    textScale = vec2(0.1, 0.05)
+    textScale = vec2(0.1, 0.025)
     textYPad = 0.02
     textLeft = -0.85
   var
-    textY = 0.9
+    textY = 0.95 - textScale.y
 
   let scoreDisplay = newEntityWith(fontText(font, $score.value, vec3(textLeft, textY, fontZ), vec4(1.0, 1.0, 0.0, 0.5), textScale))
   textY -= textScale.y + textYPad
