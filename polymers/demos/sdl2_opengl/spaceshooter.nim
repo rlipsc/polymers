@@ -203,6 +203,7 @@ func colRange(a: SomeFloat): auto = 0.float32 .. a.float32
 func colRanges(v: GLvectorf4): auto = [v.r.colRange, v.g.colRange, v.b.colRange]
 
 let
+  # Download this font from here: https://www.1001fonts.com/orbitron-font.html
   font = staticLoadFont(currentSourcePath.splitFile.dir.joinPath r"Orbitron Bold.ttf")
   particleZ = -0.5
   fontZ = -0.6
