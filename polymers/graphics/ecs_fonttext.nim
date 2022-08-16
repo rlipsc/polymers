@@ -5,10 +5,12 @@ template defineFontTextComponents*(compOpts: ECSCompOptions) {.dirty.} =
   when not declared(opengl): {.fatal: req & "opengl".}
   when not declared(glbits): {.fatal:  req & "glbits".}
   when not declared(ttfInit):
-    import sdl2.ttf
+    import sdl2/ttf
   when not declared(TextCache):
     import glbits/fonts
   
+  ecsImport glbits/fonts
+
   ttfInit()
 
   registerComponents(compOpts):
@@ -18,15 +20,7 @@ template defineFontTextComponents*(compOpts: ECSCompOptions) {.dirty.} =
         hidden*: bool
 
   FontText.onRemove:
-    curComponent.tc.deallocate
-
-  proc fontText*(font: FontPtr, text: string, pos = vec3(0.0), col = vec4(1.0, 1.0, 1.0, 1.0), scale = vec2(0.1)): FontText =
-    result = FontText(tc: initTextCache())
-    result.tc.font = font
-    result.tc.position = pos
-    result.tc.scale = scale
-    result.tc.col = col
-    result.tc.updateText text
+    curComponent.tc.freeTexture
 
   proc text*(fontText: FontText): string = fontText.tc.text
 
@@ -42,10 +36,17 @@ template defineFontTextComponents*(compOpts: ECSCompOptions) {.dirty.} =
   proc `position=`*(fontText: var FontText, pos: GLvectorf2) =
     fontText.tc.position = pos
 
-  proc scale*(fontText: FontText): GLvectorf2 = fontText.tc.scale
+  proc fixedScale*(fontText: FontText): GLvectorf2 = fontText.tc.fixedScale
 
-  proc `scale=`*(fontText: var FontText, scale: GLvectorf2) =
-    fontText.tc.scale = scale
+  proc setFixedScale*(fontText: var FontText, scale: GLvectorf2) =
+    fontText.tc.setFixedScale scale
+  
+  onEcsBuilt:
+    proc setFixedScale*(fontText: FontTextInstance, scale: GLvectorf2) =
+      fontText.tc.setFixedScale scale
+
+  proc renderedSize*(fontText: FontText): GLvectorf2 =
+    fontText.tc.renderedSize
 
   proc col*(fontText: FontText): GLvectorf4 = fontText.tc.col
 
@@ -58,19 +59,45 @@ template defineFontTextComponents*(compOpts: ECSCompOptions) {.dirty.} =
   proc `angle=`*(fontText: var FontText, angle: float) =
     fontText.tc.fontAngle = angle
 
-
 template defineFontTextSystems*(sysOpts: EcsSysOptions): untyped {.dirty.} =
   ## Outputs the `renderFonts` proc to render fonts to texture.
-  
-  makeSystemOpts("drawFontText", [FontText], sysOpts):
-    all:
-      if not item.fontText.hidden:
-        item.fontText.tc.render
 
+  makeSystemOpts("drawFontText", [FontText], sysOpts):
+    fields:
+      lastScreenRes: GLvectorf2
+      screenRes {.public.} = vec2(-1)
+    
+    if sys.lastScreenRes != sys.screenRes:
+      sys.lastScreenRes = sys.screenRes
+      all:
+        setScreenRes(fontText.tc, sys.screenRes)
+
+    all:
+      if likely(not item.fontText.hidden):
+        render(item.fontText.tc)
+  
   defineGroup "renderFonts", ["drawFontText"]
+  ecsImport sdl2/ttf
 
   onEcsBuilt:
+
     commitGroup "renderFonts", "renderFonts"
+
+    proc setFontScreenSize*(x, y: cint) =
+      ## Helper to simplify changing the screen resolution.
+      sysDrawFontText.screenRes = vec2(x.float32, y.float32)
+      doDrawFontText()
+
+    proc fontText*(font: FontPtr, text: string, col = vec4(1.0, 1.0, 1.0, 1.0), pos = vec3(0.0), fixedScale = vec2(0.0)): FontText =
+      ## Create a `FontText` component.
+      ## The scale is defined by the font's point size. To provide a fixed scale, set `fixedScale` to a non-zero `GLvectorf2`.
+      result = FontText(tc: initTextCache())
+      result.tc.setScreenRes sysDrawFontText.screenRes
+      result.tc.font = font
+      result.tc.text = text
+      result.tc.position = pos
+      result.tc.setFixedScale fixedScale
+      result.tc.col = col
 
 
 template defineFontText*(compOpts: ECSCompOptions, sysOpts: EcsSysOptions) {.dirty.} =
@@ -86,7 +113,7 @@ when isMainModule:
   from math import degToRad, TAU, `mod`
 
   initSdlOpenGl()
-
+  
   const
     cOpts = defaultCompOpts
     sOpts = defaultSysOpts
@@ -128,13 +155,15 @@ when isMainModule:
   makeEcs()
   commitSystems("run")
 
+  setFontScreenSize sdlDisplay.w, sdlDisplay.h
+
   let
-    font = staticLoadFont(currentSourcePath.splitFile.dir.joinPath r"xirod.ttf")
+    font = staticLoadFont(currentSourcePath.splitFile.dir.joinPath r"Orbitron Bold.ttf", 21)
     textEnt =
       newEntityWith(
-        fontText(font, "abcdef ABCDEF", vec3(0.0), scale = vec2(0.1)),
+        fontText(font, "abcdef ABCDEF"),
         Velocity(value: vec2(0.001, 0.002)),
-        Spin(speed: 1.0.degToRad)
+        Spin(speed: 0.2.degToRad)
       )
 
   pollEvents:

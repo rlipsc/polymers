@@ -488,7 +488,7 @@ template defineHttp*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions): untyped 
 
 
   makeSystemOpts("handleRedirects", [HttpRedirecting, HttpRequest, HttpResponse], sysOpts):
-    addedCallback:
+    all:
       const prefix = "HTTP redirection"
       # HTTP responses from requests that return a redirection are tagged here.
       # The user may specify components to be added with 'httpRedirection.onRedirect'.
@@ -524,24 +524,26 @@ template defineHttp*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions): untyped 
 
 
   makeSystemOpts("routeEntity", [HttpRequest, HttpRouteEntity], sysOpts):
-    addedCallback:
+    all:
       var found: bool
       for route in item.httpRouteEntity.patterns:
         # TODO: Proper patterns.
         if cmpIgnoreCase(item.httpRequest.url, route.path) == 0:
           found = true
-          item.entity.add route.onAccept
+          entity.add route.onAccept
           break
       if not found:
-        networkLog ["", entityIdStr(item.entity), "Route not found", item.httpRequest.url]
+        networkLog ["", entityIdStr(entity), "Route not found", item.httpRequest.url]
         if item.httpRouteEntity.otherwise.len > 0:
-          item.entity.add item.httpRouteEntity.otherwise
+          entity.add item.httpRouteEntity.otherwise
         else:
-          item.entity.add HttpResponse(
+          entity.add HttpResponse(
             status: Http404
           )
       else:
         networkLog ["  >-", entityIdStr(item.entity), "Route accepted", item.httpRequest.url]
+    finish:
+      sys.remove HttpRouteEntity
 
 
 when isMainModule:

@@ -179,7 +179,6 @@ makeSystem("fetchTableData", [DatabaseConnection, FetchTableData]):
 makeSystem("updateDisplay", [QueryResult, DisplayData]):
   all:
     # Output the query as a table.
-    template displayData: untyped = item.displayData
     if not displayData.updated:
       displayData.clear
       var

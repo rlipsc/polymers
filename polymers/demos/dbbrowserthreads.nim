@@ -129,10 +129,9 @@ makeSystem("updateCursorPos", [EditString, RenderString]):
     let pos = charPos(item.renderString.x, item.renderString.y)
     setCursorPos pos.x + item.editString.xPos + 1, pos.y
 
-makeSystem("fetchTables", [DBConnectionInfo, FetchTables]):
+makeSystem("fetchTables", [con: DBConnectionInfo, FetchTables]):
   all:
     # Takes FetchTables and adds Tables
-    template con: untyped = item.dbConnectionInfo
     entity.addOrUpdate Tables()
     entity.addOrUpdate ThreadQuery(
       title: "Available Tables",
@@ -185,7 +184,6 @@ makeSystem("fetchTableData", [DBConnectionInfo, FetchTableData]):
 makeSystem("updateDisplay", [QueryResult, DisplayData]):
   all:
     # Update DisplayData with data from QueryResult.
-    template displayData: untyped = item.displayData
     if not displayData.updated:
       displayData.clear
       var
@@ -361,9 +359,8 @@ makeSystem("controlTableFields", [TableFields, DisplayData, KeyDown, LineCursor]
         entity.addComponent FetchTables()
       else: discard
 
-makeSystem("lineCursorNav", [LineCursor, KeyDown]):
+makeSystem("lineCursorNav", [lc: LineCursor, KeyDown]):
   all:
-    let lc = item.lineCursor
     var removeKeyDown: bool
     for i in countDown(item.keyDown.codes.high, 0):
       case item.keyDown.codes[i]
@@ -377,19 +374,18 @@ makeSystem("lineCursorNav", [LineCursor, KeyDown]):
     if removeKeyDown:
       entity.remove KeyDown
 
-makeSystem("dispLineCursor", [LineCursor, DisplayData]):
+makeSystem("dispLineCursor", [cursor: LineCursor, DisplayData]):
   all:
-    template cursor: untyped = item.lineCursor
-    template line(r: int): untyped = item.displayData.access.rows[r]
+    template line(r: int): untyped = displayData.access.rows[r]
     template setCol(row: int, fg: ForegroundColor, bg: BackgroundColor, intense = false): untyped =
-      if row >= 0 and row < item.displayData.access.rows.len:
+      if row >= 0 and row < displayData.access.rows.len:
         for col in 0 ..< line(row).len:
           let rs = line(row)[col].rs
           rs.colour = fg
           rs.backgroundColour = bg
           rs.forceUpdate = true
       
-    let top = item.displayData.rows.high
+    let top = displayData.rows.high
     if cursor.line < 0: cursor.line = 0
     if cursor.line > top: cursor.line = top
 

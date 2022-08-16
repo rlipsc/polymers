@@ -5,6 +5,7 @@
 import polymorph
 
 template defineKilling*(componentOptions: static[ECSCompOptions]): untyped {.dirty.} =
+  ecsImportFrom times, epochTime
 
   registerComponents(componentOptions):
     type
@@ -18,11 +19,12 @@ template defineKilling*(componentOptions: static[ECSCompOptions]): untyped {.dir
   KillAfter.onInit:
     curComponent.startTime = epochTime()
 
+
 template defineKillingSystems*(systemOptions: static[ECSSysOptions]): untyped {.dirty.} =
   # To effectively use a killed tag, it is desirable to be able to decide
   # where they are ultimately removed so that you can process Killed in your
   # own systems first.
-  import times
+  ecsImportCommitFrom times, epochTime
 
   # This system's run order is fairly independent so hasn't been separated out to another template.
   makeSystemOpts("killAfter", [KillAfter], systemOptions):

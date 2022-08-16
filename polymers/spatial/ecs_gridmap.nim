@@ -60,7 +60,8 @@ template defineGridMap*(gridRes: static[float], positionType: typedesc, gridComp
   ## a single grid square.
   ## `positionType` can be any type that includes `x` and `y` fields of `SomeFloat`.
   from strutils import toLowerAscii
-  from math import sqrt
+  when not declared(math):
+    import math
 
   # The system is wrapped in a macro so we can incorporate the provided `positionType`.
   macro `genSystem opPostfix`: untyped =
@@ -115,7 +116,7 @@ template defineGridMap*(gridRes: static[float], positionType: typedesc, gridComp
 
         fields:
           # The grid has an extra row at the higher extent to handle y coordinates of 1.0.
-          grid: array[0 .. `gridResolution` * `gridResolution` + `gridResolution`, seq[EntityRef]]
+          grid {.public.}: array[0 .. `gridResolution` * `gridResolution` + `gridResolution`, seq[EntityRef]]
 
         all:
           # Stores entities with `gridComp` at a grid slot according to `Position`. 
@@ -171,7 +172,7 @@ template defineGridMap*(gridRes: static[float], positionType: typedesc, gridComp
                 for entity in `gridMapSysIdent`.grid[index]:
                   yield entity
 
-        iterator `queryGridPrecise`*(`x`, `y`, `r`: SomeFloat): tuple[`entity`: EntityRef, `posIdent`: `posIdentInst`, `dist`: float] =
+        iterator `queryGridPrecise`*[T: SomeFloat](`x`, `y`, `r`: T): tuple[`entity`: EntityRef, `posIdent`: `posIdentInst`, `dist`: T] =
           ## Queries the grid for entities.
           ## This is accurate to exactly `radius`.
           let sRadius = `r` * `r`

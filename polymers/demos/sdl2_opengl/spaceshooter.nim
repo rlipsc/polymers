@@ -150,6 +150,7 @@ registerComponents(compOpts):
       startScale: GLvectorf3
       normTime: float
       startCol: GLvectorf4
+    FontScaled = object
     Particle = object
     Trail = object
       particles: int
@@ -162,7 +163,7 @@ registerComponents(compOpts):
     ReadControls = object
     Bullet = object
     Score = object
-      value: int
+      value: int64
     ChildOf = object  # Added to entities spawned from weapons.
       parent: EntityRef
 
@@ -204,7 +205,8 @@ func colRanges(v: GLvectorf4): auto = [v.r.colRange, v.g.colRange, v.b.colRange]
 
 let
   # Download this font from here: https://www.1001fonts.com/orbitron-font.html
-  font = staticLoadFont(currentSourcePath.splitFile.dir.joinPath r"Orbitron Bold.ttf")
+  fontPath = currentSourcePath.splitFile.dir.joinPath r"Orbitron Bold.ttf"
+  font = openFont(fontPath.cstring, ptsize = 24)
   particleZ = -0.5
   fontZ = -0.6
 
@@ -271,6 +273,9 @@ onEcsBuilt:
 
   proc applyScore(target, ent: EntityRef) =
     # Applies a score in 'target' to 'ent'.
+    if not(target.alive) or not(ent.alive):
+      return
+
     const defaultKillScore = 1
     let childOf = ent.fetch ChildOf
 
@@ -312,9 +317,9 @@ onEcsBuilt:
           source: parent
         )
 
-  proc createText(value: string, pos: GLvectorf2, col: GLvectorf4, duration = 1.5, vel = vec2(0.0), size = vec2(0.05)): EntityRef {.discardable.} =
+  proc createText(value: string, pos: GLvectorf2, col: GLvectorf4, duration = 1.5, vel = vec2(0.0), size = vec2(0.0)): EntityRef {.discardable.} =
     result = newEntityWith(
-      fontText(font, value, vec3(pos[0], pos[1], fontZ), col, size),
+      fontText(font, value, col, vec3(pos[0], pos[1], fontZ), size),
       ShrinkAway(),
       KillAfter(duration: duration),
     )
@@ -326,11 +331,11 @@ onEcsBuilt:
         Velocity(x: vel.x, y: vel.y)
       )
 
-  proc collisionDamageText(ent: EntityRef, pos: GLvectorf2, createText: string) =
+  proc collisionDamageText(ent: EntityRef, pos: GLvectorf2, text: string) =
     if not ent.has Bullet:
       # No damage text for bullets.
       let
-        textEnt = createText(createText, vec2(pos.x, pos.y), vec4(1.0, 0.0, 0.0, 0.9))
+        textEnt = createText(text, vec2(pos.x, pos.y), vec4(1.0, 0.0, 0.0, 0.9))
     
       if ent.has Player:
         discard textEnt.add(
@@ -381,6 +386,7 @@ onEcsBuilt:
             if health.valid and health.amount > 0:
               collider.applyScore struck
 
+
 makeSystemOpts("movement", [Position, Velocity], sysOpts):
   # This system handles momentum and drag.
   all:
@@ -389,11 +395,13 @@ makeSystemOpts("movement", [Position, Velocity], sysOpts):
     item.velocity.x *= 0.99
     item.velocity.y *= 0.99
 
+
 makeSystemOpts("descendParticles", [Position, Particle], sysOpts):
   # Makes particles gradually move to the background.
   let
     zDescent = 0.0001 * dt
   all: item.position.z += zDescent
+
 
 makeSystemOpts("seekPlayer", [Seek, Position, Velocity, Model], sysOpts):
   # Move towards player.
@@ -419,28 +427,34 @@ makeSystemOpts("seekPlayer", [Seek, Position, Velocity, Model], sysOpts):
     item.velocity.y += desiredVel.y - item.velocity.y
     item.model.angle = angle
 
+
 makeSystemOpts("collidePlayer", [Position, Velocity, Health, PlayerGrid], sysOpts):
   all:
     for colEntPos in queryGridPreciseEnemy(item.position.x, item.position.y, 0.05):
       entity.applyCollision(item.health, item.position, item.velocity, colEntPos.entity)
+
 
 makeSystemOpts("collideEnemy", [Position, Velocity, Health, EnemyGrid], sysOpts):
   all:
     for colEntPos in queryGridPrecisePlayer(item.position.x, item.position.y, 0.05):
       entity.applyCollision(item.health, item.position, item.velocity, colEntPos.entity)
 
+
 makeSystemOpts("orbit", [Orbit], sysOpts):
   all:
     item.orbit.a = (item.orbit.a + item.orbit.s * dt) mod TAU
+
 
 makeSystemOpts("orbitPos", [Position, Orbit], sysOpts):
   all:
     item.position.x = item.orbit.pos.x + item.orbit.w * cos(item.orbit.a)
     item.position.y = item.orbit.pos.y + item.orbit.h * sin(item.orbit.a)
 
+
 makeSystemOpts("fontWithPos", [FontText, Position], sysOpts):
   all:
     item.fontText.position = vec2(item.position.x, item.position.y)
+
 
 makeSystemOpts("playerKilled", [Killed, Player, Position, Model, not DeathTimer], sysOpts):
   fields:
@@ -465,6 +479,7 @@ makeSystemOpts("playerKilled", [Killed, Player, Position, Model, not DeathTimer]
     # Disable player input.
     entity.remove ReadControls
     entity.add DeathTimer(start: epochTime(), duration: sys.deathDuration)
+
 
 makeSystemOpts("controls", [ReadControls, Position, Velocity, Model, Weapon], sysOpts):
   # Handle player input.
@@ -491,8 +506,6 @@ makeSystemOpts("controls", [ReadControls, Position, Velocity, Model, Weapon], sy
       tAngle = angle + PI
       tx = item.position.x + item.model.scale[0] * cos(tAngle)
       ty = item.position.y + item.model.scale[1] * sin(tAngle)
-
-      model = item.model
 
     # Point the model towards the mouse coordinates.
     model.angle = angle
@@ -538,18 +551,19 @@ makeSystemOpts("controls", [ReadControls, Position, Velocity, Model, Weapon], sy
 
 makeSystemOpts("controlWeapon", [ReadControls, Weapon], sysOpts):
   fields:
-    mouseButtons: MButtons
+    mouseButtons: set[uint8]
   
   all:
-    if sys.mouseButtons.left:
+    if BUTTON_LEFT in sys.mouseButtons:
       item.weapon.active = true
     else:
       item.weapon.active = false
     
-    if sys.mouseButtons.right:
+    if BUTTON_RIGHT in sys.mouseButtons:
       item.weapon.special = true
     else:
       item.weapon.special = false
+
 
 makeSystemOpts("fireWeapon", [Weapon, Position, Model, not Killed], sysOpts):
   # Handles constructing bullets from Weapon.
@@ -596,6 +610,7 @@ makeSystemOpts("fireWeapon", [Weapon, Position, Model, not Killed], sysOpts):
           vec2(bulletSpeed * cos(angle), bulletSpeed * sin(angle))
         )
 
+
 makeSystemOpts("trails", [Position, Trail], sysOpts):
   stream 10:
     particles(
@@ -609,6 +624,7 @@ makeSystemOpts("trails", [Position, Trail], sysOpts):
       col = item.trail.col.colRanges,
       duration = item.trail.duration
     )
+
 
 makeSystemOpts("flames", [Flames, Position, Health, not Killed], sysOpts):
   
@@ -669,6 +685,7 @@ makeSystemOpts("flames", [Flames, Position, Health, not Killed], sysOpts):
       else:
         entity.remove Flames
 
+
 makeSystemOpts("heal", [Position, Heal, Health, not Killed, not Flames], sysOpts):
   all:
     if item.health.amount < item.health.full:
@@ -691,6 +708,7 @@ makeSystemOpts("heal", [Position, Heal, Health, not Killed, not Flames], sysOpts
           col = [colRange(0.1), colRange(1.0), colRange(0.1)],
           duration = 2.0
         )
+
 
 makeSystemOpts("wallPhysics", [Position, Velocity, Model, Bounce, not Killed], sysOpts):
   # This system handles bouncing off edges.
@@ -757,6 +775,7 @@ makeSystemOpts("wallPhysics", [Position, Velocity, Model, Bounce, not Killed], s
       item.model.angle = arctan2(r[1], r[0])
       dust(bottom)
 
+
 makeSystemOpts("shrinkAway", [ShrinkAway, KillAfter], sysOpts):
   let
     curTime = epochTime()
@@ -765,6 +784,7 @@ makeSystemOpts("shrinkAway", [ShrinkAway, KillAfter], sysOpts):
     item.shrinkAway.normTime = 1.0 - clamp(
       (curTime - item.killAfter.startTime) / item.killAfter.duration
     , 0.0, 1.0)
+
 
 makeSystemOpts("shrinkAwayModel", [ShrinkAway, Position, KillAfter, Model, not Killed], sysOpts):
   added:
@@ -775,13 +795,23 @@ makeSystemOpts("shrinkAwayModel", [ShrinkAway, Position, KillAfter, Model, not K
     item.model.scale = vec3(newScale[0], newScale[1], item.model.scale[2])
     item.model.col = item.shrinkAway.startCol * item.shrinkAway.normTime
 
-makeSystemOpts("shrinkAwayFont", [ShrinkAway, KillAfter, FontText], sysOpts):
+
+defineToGroup "updateRenderedFontSizes":
+  # The font scale is only available after rendering, so this is called
+  # afterwards to get the rendered size and tag with FontScaled.
+  makeSystemOpts("shrinkAwayFontSizes", [ShrinkAway, FontText, not FontScaled], sysOpts):
+    all: shrinkAway.startScale = vec3(fontText.renderedSize.x, fontText.renderedSize.y, 1.0)
+    sys.add FontScaled()
+
+
+makeSystemOpts("shrinkAwayFont", [ShrinkAway, KillAfter, FontText, FontScaled], sysOpts):
+  # This system is only run when the rendered font sizes have been calculated.
   added:
-    item.shrinkAway.startScale = vec3(item.fontText.scale[0], item.fontText.scale[1], 1.0)
-    item.shrinkAway.startCol = item.fontText.col
+    shrinkAway.startCol = item.fontText.col
   all:
-    item.fontText.scale = item.shrinkAway.startScale.xy * item.shrinkAway.normTime
-    item.fontText.col = item.shrinkAway.startCol * item.shrinkAway.normTime
+    fontText.setFixedScale shrinkAway.startScale.xy * shrinkAway.normTime
+    fontText.col = shrinkAway.startCol * shrinkAway.normTime
+
 
 makeSystemOpts("killEnemies", [Enemy], sysOpts):
   # This system stores a record of enemy entities and when unpaused will
@@ -789,6 +819,7 @@ makeSystemOpts("killEnemies", [Enemy], sysOpts):
   init: sys.paused = true
   sys.clear
   sys.paused = true
+
 
 makeSystemOpts("damageOverTime", [Position, DamageOverTime, Health, not Killed], sysOpts):
   let
@@ -814,21 +845,22 @@ makeSystemOpts("damageOverTime", [Position, DamageOverTime, Health, not Killed],
           vel = vec2(dir[0] * speed, dir[1] * speed),
           size = vec2(0.06, 0.03)
         )
+
       if item.health.amount <= 0:
         item.damageOverTime.source.applyScore entity
 
     if curTime - dot.startTime >= dot.duration:
       entity.remove DamageOverTime
 
-makeSystemOpts("dead", [Position, Health, not Killed], sysOpts):
+
+makeSystemOpts("checkDeath", [Position, Health, not Killed], sysOpts):
   all:
     if item.health.amount <= 0.0:
-      let
-        posVec = item.position.getVec
-      
+      let posVec = item.position.getVec
       entity.killText(posVec)
       particles(posVec, 0.0, TAU, Model(modelId: circleModel), scale = 0.03, particleCount = 20, speed = 0.2..0.4)
       entity.add Killed()
+
 
 makeSystemOpts("explosionFx", [Killed, Position, Model], sysOpts):
   all:
@@ -842,6 +874,7 @@ makeSystemOpts("explosionFx", [Killed, Position, Model], sysOpts):
       speed = 0.2..0.4,
       col = item.model.col.colRanges
     )
+
 
 template doBoom(gridProc: untyped) {.dirty.} =
   # Applies 'ExplodeOnDeath' damage within an area. 
@@ -887,9 +920,11 @@ makeSystemOpts("boomPlayer", [Killed, ExplodeOnDeath, Position, PlayerGrid], sys
   # Cause area of affect damage to enemies around the entity.
   all: doBoom(queryGridPreciseEnemy)
 
+
 makeSystemOpts("boomEnemy", [Killed, ExplodeOnDeath, Position, EnemyGrid], sysOpts):
   # Cause area of affect damage to players around the entity.
   all: doBoom(queryGridPrecisePlayer)
+
 
 makeSystem("restartGame", [Killed, DeathTimer, Position, Model, Health]):
   all:
@@ -911,6 +946,7 @@ makeSystem("restartGame", [Killed, DeathTimer, Position, Model, Health]):
       entity.add ReadControls()
       entity.remove Killed, DeathTimer, DamageOverTime
 
+
 makeSystemOpts("killAfter", [KillAfter], sysOpts):
   let
     curTime = epochTime()
@@ -919,8 +955,10 @@ makeSystemOpts("killAfter", [KillAfter], sysOpts):
     if curTime - item.killAfter.startTime >= item.killAfter.duration:
       item.entity.addIfMissing Killed()
 
+
 makeSystemOpts("deleteKilled", [Killed, not Player], sysOpts):
   finish: sys.clear
+
 
 # Update GPU for rendering.
 defineOpenGLUpdateSystems(sysOpts, Position)
@@ -928,6 +966,7 @@ defineOpenGLUpdateSystems(sysOpts, Position)
 # Generate ECS.
 makeEcs(entOpts)
 commitSystems("run")
+commitGroup "updateRenderedFontSizes", "updateFontSizes"
 
 #-------------------
 
@@ -1214,7 +1253,6 @@ proc main() =
     
     backgroundTex = newTextureId(max = 1)
     backgroundImage: GLTexture
-    mouseButtons: MButtons
     frameCount: int
     lastFPSUpdate: float
     lastFrame: float
@@ -1226,21 +1264,30 @@ proc main() =
     bg.fetch(Texture).scale[0] = sdlDisplay.aspect
 
   let
-    textScale = vec2(0.1, 0.025)
+    textScale = vec2(0)
     textYPad = 0.02
     textLeft = -0.85
   var
     textY = 0.95 - textScale.y
+  
+  setFontScreenSize(sdlDisplay.w, sdlDisplay.h)
 
-  let scoreDisplay = newEntityWith(fontText(font, $score.value, vec3(textLeft, textY, fontZ), vec4(1.0, 1.0, 0.0, 0.5), textScale))
-  textY -= textScale.y + textYPad
-  let levelDisplay = newEntityWith(fontText(font, "Level 1", vec3(textLeft, textY, fontZ), vec4(1.0, 1.0, 0.0, 0.5), textScale))
-  textY -= textScale.y + textYPad
-  let healthDisplay = newEntityWith(fontText(font, "Health", vec3(textLeft, textY, fontZ), vec4(1.0, 1.0, 0.0, 0.5), textScale))
-  textY -= textScale.y + textYPad
-  let fpsDisplay = newEntityWith(fontText(font, "FPS", vec3(textLeft, textY, fontZ), vec4(1.0, 1.0, 0.0, 0.5), textScale))
-  textY -= textScale.y + textYPad
-  let entDisplay = newEntityWith(fontText(font, "Entities", vec3(textLeft, textY, fontZ), vec4(1.0, 1.0, 0.0, 0.5), textScale))
+  proc alignTextX(entities: Entities, x, y: GLfloat, yPad = 0.02'f32) =
+    var curY = y
+    for e in entities:
+      let text = e.fetch FontText
+      if text.valid:
+        let size = text.tc.renderedSize
+        text.position = vec2(x + size.x, curY)
+        curY -= size.y + yPad
+
+  let
+    scoreDisplay = newEntityWith( fontText(font, $score.value, vec4(1.0, 1.0, 0.0, 0.5))  )
+    levelDisplay = newEntityWith( fontText(font, "Level 1", vec4(1.0, 1.0, 0.0, 0.5)) )
+    healthDisplay = newEntityWith( fontText(font, "Health", vec4(1.0, 1.0, 0.0, 0.5)) )
+    fpsDisplay = newEntityWith( fontText(font, "FPS", vec4(1.0, 1.0, 0.0, 0.5)) )
+    entDisplay = newEntityWith( fontText(font, "Entities", vec4(1.0, 1.0, 0.0, 0.5)) )
+    disp = @[scoreDisplay, levelDisplay, healthDisplay, fpsDisplay, entDisplay]
 
   let
     scoreText = scoreDisplay.fetch FontText
@@ -1262,24 +1309,11 @@ proc main() =
 
   # Game loop.
   pollEvents:
-    # Handle other events.
-    
-    if event.kind == MouseButtonDown:
-      var mb = evMouseButton(event)
-      if mb.button == BUTTON_LEFT: mouseButtons.left = true
-      if mb.button == BUTTON_RIGHT: mouseButtons.right = true
-    elif event.kind == MouseButtonUp:
-      var mb = evMouseButton(event)
-      if mb.button == BUTTON_LEFT: mouseButtons.left = false
-      if mb.button == BUTTON_RIGHT: mouseButtons.right = false
-
-  do:
     # Main loop.
 
     if sdlDisplay.changed:
       # Display has been resized.
       redrawBackground(background)
-      setTextureAspectRatios(sdlDisplay.aspect)
 
     if sysKillEnemies.count == 0:
       # All enemies have been killed, create a new level.
@@ -1295,10 +1329,12 @@ proc main() =
       redrawBackground(background)
       planets.genPlanets()
 
-    sysControls.mousePos = mouseInfo.gl
-    sysControlWeapon.mouseButtons = mouseButtons
+    if mouseInfo.changed:
+      sysControls.mousePos = mouseInfo.gl
+      sysControlWeapon.mouseButtons = mouseInfo.buttons
 
     scoreText.text = &"Score: {score.value}"
+    disp.alignTextX -0.95, 0.95
 
     let
       frameTime = epochTime()
@@ -1326,6 +1362,7 @@ proc main() =
       renderActiveTextures()
       renderActiveModels()
       renderFonts()
+      updateFontSizes()
 
 
 main()

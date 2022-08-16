@@ -1,4 +1,4 @@
-import polymorph, polymers, glbits/modelrenderer, opengl, sdl2, random, math
+import polymorph, polymers, glbits, opengl, sdl2, random, math
 
 ## Inspired by the particle system described here:
 ## https://www.youtube.com/watch?v=makaJpLvbow

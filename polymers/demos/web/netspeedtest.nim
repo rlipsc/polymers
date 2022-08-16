@@ -8,7 +8,6 @@ const
   sysOpts = ECSSysOptions(maxEntities: maxEnts)
 
 import random
-from winlean import getLastError
 
 defineUDPNetworking(compOpts, sysOpts)
 makeEcs(entOpts)

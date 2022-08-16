@@ -12,11 +12,8 @@ import polymorph
 template defineECSChipmunk2D*(compOpts: ECSCompOptions) {.dirty.} =
   ## Defines components for managing Chipmunk2D physics bodies and shapes.
   ## No systems are defined.
+  ecsImport chipmunk
   import chipmunk
-  when not declared(cos) or not declared(sin):
-    {.fatal: "ecs_chipmunk2D requires the stdlib math module to be imported".}
-
-  export chipmunk
 
   type
     ShapeKind* = enum skCircle, skSquare, skPoly, skSegment

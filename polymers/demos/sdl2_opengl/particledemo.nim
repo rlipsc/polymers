@@ -32,14 +32,14 @@
 ## Uses sdl2 wrapper, obtained with `nimble install sdl2` or from here: https://github.com/nim-lang/sdl2
 ## Uses glbits to draw the models, found here: https://github.com/rlipsc/glbits
 
-import polymorph, polymers, glbits/modelrenderer, opengl, sdl2, random
+import polymorph, polymers, glbits, glbits/modelrenderer, opengl, sdl2, random
 from math import TAU, PI, degToRad, cos, sin, `mod`, sqrt, exp, floor
 from times import cpuTime
 
 when defined(debug):
   const
     # Reduce number of particles when debugging.
-    maxEnts = 80_000
+    maxEnts = 50_000
     particleScale = 0.008
 else:
   const

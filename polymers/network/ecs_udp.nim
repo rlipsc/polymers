@@ -1,9 +1,10 @@
 import polymorph
 
 template defineUDPNetworking*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions): untyped {.dirty.} =
+  ecsImport nativesockets
+  ecsImportCommitFrom os, raiseOSError, osLastError
+  ecsImportCommitFrom winlean, recvFrom, wsaGetLastError, AddrInfo, bindSocket, WSAEWOULDBLOCK
   import nativesockets
-  from os import raiseOSError, osLastError
-  from winlean import recvFrom, wsaGetLastError, AddrInfo, bindSocket, WSAEWOULDBLOCK
 
   type
     UDPData* = object

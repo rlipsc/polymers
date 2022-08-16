@@ -7,6 +7,7 @@ template defineConsoleEvents*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions):
   import tables
 
   from winlean import DWORD, WINBOOL, Handle, getStdHandle, STD_INPUT_HANDLE
+  ecsImportFrom winlean, DWORD, WINBOOL, Handle, getStdHandle, STD_INPUT_HANDLE
   
   type
     ConsoleCoord* = tuple[x, y: uint16]

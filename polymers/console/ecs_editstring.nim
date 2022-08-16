@@ -6,7 +6,7 @@ template defineAsk*(compOpts: EcsCompOptions, sysOpts: EcsSysOptions) {.dirty.} 
   when not declared(RenderString) or not declared(KeyDown):
     error "ecs_editstring "
 
-  from strutils import Digits, Letters, delete
+  ecsImportFrom strutils, Digits, Letters, delete
 
   registerComponents(compOpts):
     type

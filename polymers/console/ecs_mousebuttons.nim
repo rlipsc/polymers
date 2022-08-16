@@ -96,17 +96,13 @@ template defineMouseButtons*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions) {
             buttonChar.button.mouseOver = true
             buttonChar.buttonEnt.addOrUpdate MouseButtonMouseOver()
 
-  makeSystemOpts("clickedButton", [MouseButton, MouseButtonPress], sysOpts):
+  makeSystemOpts("clickedButton", [mb: MouseButton, MouseButtonPress], sysOpts):
     all:
       # Extend MouseButtonPress to invoke a callback when over the button.
-      template mb: untyped = item.mouseButton
       if mb.mouseOver:
-        
         mb.clicked = true
-        
         if mb.toggle:
           mb.forceFocus = not mb.forceFocus
-        
         if mb.handler != nil:
           mb.access.handler(item.entity, mb)
 
@@ -115,7 +111,7 @@ template defineMouseButtons*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions) {
     finish:
       sys.remove MouseButtonPress
 
-  makeSystemOpts("drawButtons", [MouseButton], sysOpts):
+  makeSystemOpts("drawButtons", [mb: MouseButton], sysOpts):
     let
       cw = sysRenderChar.charWidth
       ch = sysRenderChar.charHeight
@@ -125,7 +121,6 @@ template defineMouseButtons*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions) {
     all:
       # Updates MouseButton.characters according to the button's state.
       template chars: untyped = item.mouseButton.characters
-      template mb: untyped = item.mouseButton
       let
         size = mb.size
         expectedLen = size.x * size.y

@@ -187,7 +187,7 @@ template defineTcpNetworking*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions, 
 
   else:
     {.fatal: "Dynamic memory is not currently supported".}
-
+    # TODO: dynamic memory.
     type
       OverlappedHeader* = ref object of OVERLAPPED
         info*: OverlappedInfo
@@ -836,17 +836,6 @@ template defineTcpNetworking*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions, 
   template send*(connection: TcpConnectionInstance, tcpSend: TcpSendInstance) =
     send(connection.access, tcpSend.access, [ERROR_IO_PENDING])
 
-  proc initIoPort*(sys: var TcpEventsSystem) =
-    ## Create an IO port for the system on first run.
-    ## 
-    ## This is automatically performed when "tcpEvents" is first run,
-    ## but if you want to start using networking components before
-    ## running systems you can call this proc early manually.
-    if sys.ioPort.int == 0:
-      const threads = 1
-      sys.ioPort = createIoCompletionPort(INVALID_HANDLE_VALUE, 0, 0, threads).CompletionPortHandle
-      echo " Created IOCP port. Id = ", sys.ioPort
-
 
   # ------------------------------------------
   # Post-makeEsc extended networking utilities
@@ -854,6 +843,17 @@ template defineTcpNetworking*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions, 
 
 
   onEcsBuilt:
+    proc initIoPort*(sys: var TcpEventsSystem) =
+      ## Create an IO port for the system on first run.
+      ## 
+      ## This is automatically performed when "tcpEvents" is first run,
+      ## but if you want to start using networking components before
+      ## running systems you can call this proc early manually.
+      if sys.ioPort.int == 0:
+        const threads = 1
+        sys.ioPort = createIoCompletionPort(INVALID_HANDLE_VALUE, 0, 0, threads).CompletionPortHandle
+        echo " Created IOCP port. Id = ", sys.ioPort
+
     # Ensure io port is initialised as soon as the ECS is available.
     initIoPort(sysTcpEvents)
 
@@ -1191,7 +1191,7 @@ template defineTcpNetworking*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions, 
       networkLog defaultWidth,
         ["<...  ", entityIdStr(item.entity), $olRead.listenSocket, "Listening on", $item.tcpListen.port]
 
-      item.entity.awaitConnection(item.tcpListen.access)
+      awaitConnection(item.tcpListen.access)
 
   makeSystem("readTcp", [TcpConnection, TcpRecv]):
     addedCallback:

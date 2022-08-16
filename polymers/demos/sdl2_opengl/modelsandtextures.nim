@@ -6,14 +6,17 @@
 
 import polymorph, polymers, glbits, glbits/glrig, times
 
-when defined(debug):
-  const maxEnts = 50_000
+when not defined(release):
+  const
+    maxEnts = 150_000
+    sysOpts = fixedSizeSystem(maxEnts)
 else:
-  const maxEnts = 1_000_000
+  const
+    maxEnts = 1_000_000
+    sysOpts = fixedSizeSystem(maxEnts)
 const
   compOpts = fixedSizeComponents(maxEnts)
-  sysOpts = fixedSizeSystem(maxEnts)
-  entOpts = fixedSizeEntities(maxEnts, 3)
+  entOpts = fixedSizeEntities(maxEnts, 5)
   dt = 1.0 / 60.0
 
 defineOpenGlRenders(compOpts, sysOpts)
@@ -24,15 +27,8 @@ registerComponents compOpts:
   type
     Velocity = object
       vec: GLvectorf2
-    Response = object
-      maxSpeed: GLfloat
-      location: GLvectorf2
     VelCol = object
       startCol: GLvectorf4
-
-
-template paramType(sysTy: untyped): untyped {.dirty.} =
-  tuple[sys: ptr sysTy, rows: tuple[r1, r2: int]]
 
 template calcResponse(pos, source: GLvectorf2, sqrRadius, speed: GLfloat): GLvectorf2 =
   # Return a response vector when 'pos' and 'source' are within the squared difference, 'sqrRadius'.
@@ -47,9 +43,9 @@ template calcResponse(pos, source: GLvectorf2, sqrRadius, speed: GLfloat): GLvec
     r = force * dt
   r
 
-makeSystemOpts "movement", [Position, Velocity], sysOpts:
+makeSystemOpts "movement", [pos: Position, vel: own Velocity], sysOpts:
   fields:
-    drag = 0.008
+    drag = 0.004
 
   all:
     const
@@ -58,26 +54,26 @@ makeSystemOpts "movement", [Position, Velocity], sysOpts:
       top = vec2(0.0, 1.0)
       bottom = vec2(0.0, -1.0)
 
-    var curVec = item.velocity.vec
+    var curVec = vel.vec
 
-    item.position.x += curVec.x
-    item.position.y += curVec.y
-    item.velocity.vec = curVec - (curVec * sys.drag)
+    pos.x += curVec.x
+    pos.y += curVec.y
+    vel.vec = curVec - (curVec * sys.drag)
 
-    if item.position.x < -1.0:
-      item.position.x = -1.0
-      item.velocity.vec = curVec.reflect(left)
-    elif item.position.x > 1.0:
-      item.position.x = 1.0
-      item.velocity.vec = curVec.reflect(right)
-    elif item.position.y < -1.0:
-      item.position.y = -1.0
-      item.velocity.vec = curVec.reflect(top)
-    elif item.position.y > 1.0:
-      item.position.y = 1.0
-      item.velocity.vec = curVec.reflect(bottom)    
+    if pos.x < -1.0:
+      pos.x = -1.0
+      vel.vec = curVec.reflect(left)
+    elif pos.x > 1.0:
+      pos.x = 1.0
+      vel.vec = curVec.reflect(right)
+    elif pos.y < -1.0:
+      pos.y = -1.0
+      vel.vec = curVec.reflect(top)
+    elif pos.y > 1.0:
+      pos.y = 1.0
+      vel.vec = curVec.reflect(bottom)    
 
-makeSystemOpts "applyForce", [Position, Velocity, Response], sysOpts:
+makeSystemOpts "applyForce", [Position, Velocity], sysOpts:
   # Apply a speed to velocity within a distance.
   fields:
     forcePos: GLvectorf2
@@ -88,7 +84,7 @@ makeSystemOpts "applyForce", [Position, Velocity, Response], sysOpts:
   start:
     sys.paused = sys.forcePos == sys.lastPos
   
-  all:
+  stream maxEnts div 2:
     item.velocity.vec += calcResponse(
       vec2(item.position.x, item.position.y),
       sys.forcePos,
@@ -98,9 +94,8 @@ makeSystemOpts "applyForce", [Position, Velocity, Response], sysOpts:
   sys.lastPos = sys.forcePos
 
 makeSystemOpts "velCol", [VelCol, Velocity, Model], sysOpts:
-  # Alter Model according to velocity.
-  init:
-    sys.paused = true
+  # Map Velocity to Model.col.
+  init: sys.paused = true # Start paused.
   fields:
     changedModels: bool
     scale = 800.0  # Arbitrary scale for expected velocities.
@@ -113,12 +108,14 @@ makeSystemOpts "velCol", [VelCol, Velocity, Model], sysOpts:
       for row in sys.groups:
         row.model.col = row.velCol.startCol
 
-  all:
+  stream maxEnts div 4:
     let
       startCol = item.velCol.startCol
-      vel = item.velocity.vec.abs * sys.scale
-    item.model.col[0] = mix(startCol.r, 1.0, vel.x)
-    item.model.col[2] = mix(startCol.b, 1.0, vel.y)
+      last = item.velocity.vec
+      vel = item.velocity.vec * sys.scale
+      delta = vel - last
+      colVel = vec4(0.4) * vec4(delta.x, delta.y, 1, 1)
+    item.model.col = mix(startCol, colVel, delta.length / sys.scale)
 
   sys.changedModels = true
 
@@ -156,19 +153,13 @@ initSdlOpenGl(1024, 768)
 
 let
   shaderProg = newModelRenderer()
-  circleModel = shaderProg.makeCircleModel(8, vec4(1.0), vec4(0.3, 0.3, 0.3, 1.0), maxInstances = maxEnts)
+  circleModel = shaderProg.makeCircleModel(8, vec4(1.0), vec4(0.3, 0.3, 0.3, 0.7), maxInstances = maxEnts)
   squareModel = shaderProg.makeCircleModel(4, vec4(1.0), vec4(0.3, 0.3, 0.3, 1.0), maxInstances = maxEnts)
   ballTexture = newTextureId(max = maxEnts)
 
-var
-  ballTextureData: GLTexture
-
+var ballTextureData: GLTexture
 ballTextureData.createFlowerTexture()
 ballTexture.update(ballTextureData)
-
-# Create some entities.
-let
-  mouseCursor = newEntityWith(Position())
 
 echo "Particles: ", maxEnts
 
@@ -186,7 +177,6 @@ for i in 0 ..< squares:
     Velocity(vec: vec2(rand(-speed..speed), rand(-speed..speed))),
     Model(modelId: squareModel, angle: rand(TAU),
       scale: vec3(0.01), col: vec4(rand 0.5..1.0, rand 1.0, 1.0, 1.0)),
-    Response(maxSpeed: -speed * 0.3),
   )
 for i in 0 ..< circles:
   let
@@ -196,8 +186,7 @@ for i in 0 ..< circles:
     Position(x: rand(posRange), y: rand(posRange), z: -0.5),
     Velocity(vec: vec2(rand(-speed..speed), rand(-speed..speed))), 
     Model(modelId: circleModel, angle: rand(TAU),
-      scale: vec3(0.0036), col: pCol),
-    Response(maxSpeed: speed),
+      scale: vec3(0.0038), col: pCol),
     VelCol()
   )
 for i in 0 ..< flowers:
@@ -207,7 +196,6 @@ for i in 0 ..< flowers:
     Velocity(vec: vec2(rand(-speed..speed), rand(-speed..speed))),
     Texture(textureId: ballTexture, angle: rand(TAU),
       scale: vec2(0.02), col: vec4(rand 1.0, rand 1.0, rand 1.0, 1.0)),
-    Response(maxSpeed: -speed),
   )
 
 func activeStr(isPaused: bool): string =
@@ -229,7 +217,7 @@ proc main =
   pollEvents:
 
     if mouseInfo.changed:
-      # Update systems with mouse position
+      # Update systems with mouse position.
       sysApplyForce.forcePos = mouseInfo.gl
     
     let

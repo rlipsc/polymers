@@ -35,11 +35,8 @@ makeSystemOpts("serveTime", [TimePage], sysOpts):
 
 makeSystemOpts("finishServePage", [HttpResponseSent], sysOpts):
   # Clean up after a response.
-  added:
-    sys.deleteList.add item.entity
-    echo "\n"
+  sys.clear
 
-echo " "
 
 makeEcs(entOpts)
 commitSystems("poll")
