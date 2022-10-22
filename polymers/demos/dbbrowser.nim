@@ -7,7 +7,7 @@ const
 
 defineRenderChar(compOpts)
 defineConsoleEvents(compOpts, sysOpts)
-defineDatabaseComponents(compOpts, sysOpts)
+defineDatabaseComponents(compOpts)
 
 type DisplayRow = seq[tuple[ent: EntityRef, rs: RenderStringInstance]]
 

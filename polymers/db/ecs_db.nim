@@ -1,6 +1,6 @@
 import polymorph
 
-template defineDatabaseComponents*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions) {.dirty.} =
+template defineDatabaseComponents*(compOpts: ECSCompOptions) {.dirty.} =
   import odbc
   registerComponents(compOpts):
     type
@@ -85,13 +85,16 @@ template defineDatabaseSystems*(sysOpts: EcsSysOptions): untyped {.dirty.} =
           title: item.query.title,
           data: item.query.query.executeFetch)
 
+template defineDatabaseComponents*(compOpts: EcsCompOptions, sysOpts: EcsSysOptions) {.dirty.} =
+  defineDatabaseComponents(compOpts)
+  defineDatabaseSystems(sysOpts)
+
 when isMainModule:
   const
     eo = defaultEntityOptions
     co = defaultComponentOptions
     so = defaultSystemOptions
   defineDatabaseComponents(co, so)
-  defineDatabaseSystems(so)
 
   makeEcs(eo)
   commitSystems("run")
