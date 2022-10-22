@@ -263,7 +263,7 @@ template defineTcpNetworking*(compOpts: ECSCompOptions, sysOpts: ECSSysOptions, 
     # Setting eventLimit to a non-zero value constrains the system
     # to process a maximum number of queued operations.
     eventLimit {.public.}: Natural
-  defineSystem("readTcp", [TcpConnection, TcpRecv])
+  defineSystem("readTcp", [TcpConnection, TcpRecv], sysOpts)
   defineSystem("sendTcp", [TcpConnection, TcpSend], sysOpts)
 
 
