@@ -800,7 +800,7 @@ defineToGroup "updateRenderedFontSizes":
   # The font scale is only available after rendering, so this is called
   # afterwards to get the rendered size and tag with FontScaled.
   makeSystemOpts("shrinkAwayFontSizes", [ShrinkAway, FontText, not FontScaled], sysOpts):
-    all: shrinkAway.startScale = vec3(fontText.renderedSize.x, fontText.renderedSize.y, 1.0)
+    all: shrinkAway.startScale = vec3(fontText.renderedScale.x, fontText.renderedScale.y, 1.0)
     sys.add FontScaled()
 
 
@@ -1270,16 +1270,16 @@ proc main() =
   var
     textY = 0.95 - textScale.y
   
-  setFontScreenSize(sdlDisplay.w, sdlDisplay.h)
+  setFontScreenScale(sdlDisplay.w, sdlDisplay.h)
 
   proc alignTextX(entities: Entities, x, y: GLfloat, yPad = 0.02'f32) =
     var curY = y
     for e in entities:
       let text = e.fetch FontText
       if text.valid:
-        let size = text.tc.renderedSize
-        text.position = vec2(x + size.x, curY)
-        curY -= size.y + yPad
+        let scale = text.tc.renderedScale
+        text.position = vec2(x + scale.x, curY)
+        curY -= scale.y + yPad
 
   let
     scoreDisplay = newEntityWith( fontText(font, $score.value, vec4(1.0, 1.0, 0.0, 0.5))  )
